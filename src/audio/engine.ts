@@ -16,8 +16,8 @@ export class AudioEngine {
   private micStream: MediaStream | null = null
   private fileEl: HTMLAudioElement | null = null
   private flux: SpectralFlux | null = null
-  private freqData: Float32Array = new Float32Array(0)
-  private timeData: Float32Array = new Float32Array(0)
+  private freqData: Float32Array<ArrayBuffer> = new Float32Array(0)
+  private timeData: Float32Array<ArrayBuffer> = new Float32Array(0)
   source: AudioSource = 'none'
 
   private ensureContext(): AudioContext {

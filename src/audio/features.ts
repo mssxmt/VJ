@@ -39,12 +39,16 @@ export class SpectralFlux {
   private prev: Float32Array
   private history: number[] = []
   private cooldown = 0
+  private historySize: number
+  private refractoryFrames: number
   constructor(
     bins: number,
-    private historySize = 43, // ~0.7s at 60fps
-    private refractoryFrames = 6,
+    historySize = 43, // ~0.7s at 60fps
+    refractoryFrames = 6,
   ) {
     this.prev = new Float32Array(bins)
+    this.historySize = historySize
+    this.refractoryFrames = refractoryFrames
   }
 
   update(freqData: Float32Array, sensitivity: number): FluxResult {
