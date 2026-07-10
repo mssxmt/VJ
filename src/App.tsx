@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { MachineObject } from './machine/MachineObject'
+import { Effects } from './effects/Effects'
 
 export default function App() {
   return (
@@ -9,6 +10,7 @@ export default function App() {
       <directionalLight position={[5, 10, 5]} intensity={2} />
       <pointLight position={[-5, -5, -5]} intensity={0.5} />
       <MachineObject />
+      <Effects />
     </Canvas>
   )
 }
