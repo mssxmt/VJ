@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { MachineObject } from './machine/MachineObject'
 import { Effects } from './effects/Effects'
 import { CameraRig } from './camera/CameraRig'
+import { AutoPilot } from './control/auto'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
       <pointLight position={[-5, -5, -5]} intensity={0.5} />
       <MachineObject />
       <CameraRig />
+      <AutoPilot />
       <Effects />
     </Canvas>
   )
