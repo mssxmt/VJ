@@ -1,32 +1,70 @@
-# React + TypeScript + Vite
+# VJ
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Autechre "Gantz Graf" にインスパイアされた、ブラウザで動作する VJ ツールです。オーディオ入力に反応して変形・発光・グリッチするプロシージャルな抽象マシンをリアルタイムに描画します。
 
-Currently, two official plugins are available:
+## 特徴
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **プロシージャルマシン生成** — シード値から決定的に生成される抽象機械オブジェクト。複雑度・パーツ数・対称性などをリアルタイムに調整可能
+- **オーディオ入力** — マイク(ライン入力)またはローカル音声ファイルを解析ソースとして選択可能
+- **オンセット検出** — スペクトラルフラックスによるアタック検出で、機械の変形やエフェクトをトリガー
+- **ポストエフェクト** — グリッチ / ブルーム / 色収差 / ピクセレート / ノイズ / スキャンライン
+- **カメラ制御** — 距離・軌道速度・シェイク・FOV の手動調整と自動カット
+- **AUTO モード** — LFO とオーディオ解析によるパラメータの自動運転(machine / effects / camera を個別に ON/OFF 可能)
+- **MIDI ラーン** — 任意の MIDI コントローラのノブ / ボタンをパラメータに割り当て
+- **キーボードショートカット** — ライブ操作向けのワンキー操作
 
-## React Compiler
+## 動作環境
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **推奨ブラウザ**: Chrome / Edge(MIDI ラーンには Web MIDI API が必要)
+- WebGL2 対応の GPU / ブラウザ
+- マイク入力を使う場合はマイクへのアクセス許可が必要
 
-## Expanding the Oxlint configuration
+## セットアップ
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install      # 依存パッケージのインストール
+npm run dev      # 開発サーバ起動 (http://localhost:5173)
+npm run build    # プロダクションビルド
+npm test         # ユニットテスト実行
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 操作方法
+
+### キーボード
+
+| キー | 動作 |
+|------|------|
+| `H` | UI パネルの表示 / 非表示 |
+| `F` | フルスクリーン切り替え |
+| `Space` | AUTO モードの ON / OFF |
+| `R` | マシンの再生成(ランダムシード) |
+| `G` | グリッチのパルス |
+| `B` | ブルームのパルス |
+| `P` | ピクセレートのパルス |
+| `1`–`9` | プリセットシードに切り替え |
+
+### MIDI ラーン
+
+1. UI パネル上で割り当てたいパラメータの横にある `M` ボタンをクリック
+2. MIDI コントローラのノブやボタンを動かす
+3. そのコントロールがパラメータに割り当てられます
+
+マッピングは localStorage に保存され、次回起動時に自動復元されます。
+
+### オーディオソース
+
+- **Mic** ボタン: マイク / ライン入力を解析ソースにする(スピーカーには出力されません)
+- **File** ボタン: ローカルの音声ファイルを再生しながら解析(スピーカーにも出力されます)
+
+## 技術スタック
+
+- [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript
+- [three.js](https://threejs.org/) / [react-three-fiber](https://docs.pmnd.rs/react-three-fiber)
+- [postprocessing](https://github.com/pmndrs/postprocessing)(ポストエフェクト)
+- [zustand](https://github.com/pmndrs/zustand)(状態管理)
+- Web Audio API(解析・オンセット検出)
+- Web MIDI API(MIDI ラーン)
+
+## ライセンス
+
+MIT
