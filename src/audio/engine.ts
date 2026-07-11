@@ -15,6 +15,7 @@ export class AudioEngine {
   private sourceNode: AudioNode | null = null
   private micStream: MediaStream | null = null
   private fileEl: HTMLAudioElement | null = null
+  private objectUrl: string | null = null
   private flux: SpectralFlux | null = null
   private freqData: Float32Array<ArrayBuffer> = new Float32Array(0)
   private timeData: Float32Array<ArrayBuffer> = new Float32Array(0)
@@ -44,6 +45,15 @@ export class AudioEngine {
       this.fileEl.pause()
       this.fileEl = null
     }
+    // Revoke the blob URL so repeated file loads don't leak object URLs.
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl)
+      this.objectUrl = null
+    }
+    // Reset the gain graph so re-entry can't stack a second gain→destination
+    // edge (which would double the monitor level on each new file).
+    this.gainNode?.disconnect()
+    if (this.analyser && this.gainNode) this.gainNode.connect(this.analyser)
     this.source = 'none'
   }
 
@@ -65,7 +75,8 @@ export class AudioEngine {
     const ctx = this.ensureContext()
     await ctx.resume()
     this.disconnectSource()
-    this.fileEl = new Audio(URL.createObjectURL(file))
+    this.objectUrl = URL.createObjectURL(file)
+    this.fileEl = new Audio(this.objectUrl)
     this.fileEl.loop = true
     const node = ctx.createMediaElementSource(this.fileEl)
     node.connect(this.gainNode!)
@@ -76,8 +87,7 @@ export class AudioEngine {
   }
 
   stop(): void {
-    this.gainNode?.disconnect()
-    if (this.analyser && this.gainNode) this.gainNode.connect(this.analyser)
+    // disconnectSource resets the gain graph and tears down the active source.
     this.disconnectSource()
   }
 
