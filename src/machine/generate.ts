@@ -1,6 +1,6 @@
 import { createRng, pick, range } from '../lib/random'
 
-export type PartType = 'core' | 'box' | 'pipe' | 'fin' | 'antenna' | 'ring' | 'greeble'
+export type PartType = 'core' | 'box' | 'pipe' | 'fin' | 'antenna' | 'ring' | 'greeble' | 'spike'
 export type Band = 'low' | 'mid' | 'high'
 
 export interface Reactivity {
@@ -31,7 +31,7 @@ export interface MachineConfig {
   scaleSpread: number  // 0..1: variance of part sizes
 }
 
-const CHILD_TYPES: readonly PartType[] = ['box', 'pipe', 'fin', 'antenna', 'ring', 'greeble']
+const CHILD_TYPES: readonly PartType[] = ['box', 'pipe', 'fin', 'antenna', 'ring', 'greeble', 'spike', 'spike']
 const BANDS: readonly Band[] = ['low', 'mid', 'high']
 
 export function countParts(root: MachinePart): number {
@@ -73,8 +73,8 @@ export function generateMachine(config: MachineConfig): MachinePart {
       Math.round(rng() * 4) * (Math.PI / 2),
     ]
     const s = 1 - config.scaleSpread * rng()
-    // Elongate pipes/antennas along one axis for a mechanical silhouette
-    const elongate = part.type === 'pipe' || part.type === 'antenna'
+    // Elongate pipes/antennas/spikes along one axis for a mechanical silhouette
+    const elongate = part.type === 'pipe' || part.type === 'antenna' || part.type === 'spike'
     part.scale = elongate ? [s * 0.15, s * range(rng, 1, 3), s * 0.15] : [s, s, s]
     parent.children.push(part)
     all.push(part)

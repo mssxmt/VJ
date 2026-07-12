@@ -27,6 +27,10 @@ export const PARAMS: readonly ParamDef[] = [
   { id: 'effects.pixelate', label: 'Pixelate', group: 'effects', min: 0, max: 1, default: 0 },
   { id: 'effects.noise', label: 'Noise', group: 'effects', min: 0, max: 1, default: 0.1 },
   { id: 'effects.scanline', label: 'Scanline', group: 'effects', min: 0, max: 1, default: 0 },
+  // kick-band energy release — combine any of these
+  { id: 'effects.kickRings', label: 'Kick Rings', group: 'effects', min: 0, max: 1, default: 1, toggle: true },
+  { id: 'effects.kickParticles', label: 'Kick Particles', group: 'effects', min: 0, max: 1, default: 0, toggle: true },
+  { id: 'effects.kickFlash', label: 'Kick Flash', group: 'effects', min: 0, max: 1, default: 1, toggle: true },
   // camera
   { id: 'camera.distance', label: 'Distance', group: 'camera', min: 2, max: 30, default: 8 },
   { id: 'camera.orbitSpeed', label: 'Orbit Speed', group: 'camera', min: -2, max: 2, default: 0.1 },
