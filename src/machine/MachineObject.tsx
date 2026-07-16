@@ -246,7 +246,8 @@ export function MachineObject() {
         // folded with its lagged onset transient.
         const target = Math.pow(level, 1.4) * sc.sensitivity
         let e = env[ei] ?? 0
-        e = Math.max(e * sc.decay, target)
+        // Frame-rate independent decay (per-frame factor raised to delta*60).
+        e = Math.max(e * Math.pow(sc.decay, delta * 60), target)
         e = Math.max(e, onset * sc.sensitivity * 0.7)
         env[ei] = e
 

@@ -14,12 +14,12 @@ export function AutoPilot() {
   const onsetCount = useRef(0)
 
   useFrame((state) => {
-    const master = effectiveValue('auto.master') > 0.5
-    if (!master) {
-      modulation.clear()
-      return
-    }
     const t = state.clock.elapsedTime
+    // This component is the sole writer to the modulation map, so clear it
+    // every frame and re-set only the active sub-modes. That way a disabled
+    // sub-mode leaves no stale modulation behind (no leftover spin/stretch/etc).
+    modulation.clear()
+    if (effectiveValue('auto.master') <= 0.5) return
 
     if (effectiveValue('auto.effects') > 0.5) {
       // Slow LFO drift + audio push on effect intensities (modulation is in param units)

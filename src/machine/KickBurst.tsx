@@ -104,14 +104,17 @@ export function KickBurst() {
       }
     }
 
-    // Rings: expand + fade.
+    // Rings: energy decays frame-rate independently; a ring is only shown when
+    // the rings toggle is on AND it still has energy, so disabling mid-flight
+    // hides in-progress rings too.
+    const ringDecay = Math.pow(0.9, delta * 60)
     for (let i = 0; i < rings.length; i++) {
       const s = rings[i]
       const m = ringMeshes.current[i]
       if (!m) continue
-      if (s.energy > 0.02) {
+      s.energy *= ringDecay
+      if (wantRings && s.energy > 0.02) {
         s.scale += delta * (6 + s.scale * 3.5)
-        s.energy *= 0.9
         m.visible = true
         m.scale.setScalar(s.scale)
         m.quaternion.copy(s.quat)
@@ -121,29 +124,33 @@ export function KickBurst() {
       }
     }
 
-    // Particles: integrate + drag + die.
+    // Particles: integrate alive ones, compact them to the front of the
+    // position buffer, and constrain the draw range so dead / never-spawned
+    // points are never rendered. Drag + energy decay are frame-rate independent.
     if (pointsRef.current) {
       const attr = PARTICLE_GEO.getAttribute('position') as THREE.BufferAttribute
-      let any = false
+      const drag = Math.pow(0.94, delta * 60)
+      let alive = 0
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i]
         if (p.life > 0) {
-          p.vel.multiplyScalar(0.94)
+          p.vel.multiplyScalar(drag)
           p.pos.addScaledVector(p.vel, delta)
           p.life -= delta
-          any = true
+          attr.setXYZ(alive, p.pos.x, p.pos.y, p.pos.z)
+          alive++
         }
-        attr.setXYZ(i, p.pos.x, p.pos.y, p.pos.z)
       }
       attr.needsUpdate = true
-      pointsRef.current.visible = wantParticles && any
-      particleEnergy.current *= 0.92
+      PARTICLE_GEO.setDrawRange(0, alive)
+      particleEnergy.current *= Math.pow(0.92, delta * 60)
+      pointsRef.current.visible = wantParticles && alive > 0
       if (pointsMatRef.current) pointsMatRef.current.opacity = Math.min(1, particleEnergy.current)
     }
 
-    // Flash: pop + fade.
+    // Flash: pop + fade (frame-rate independent).
     if (flashRef.current && flashMatRef.current) {
-      flashEnergy.current *= 0.86
+      flashEnergy.current *= Math.pow(0.86, delta * 60)
       const e = flashEnergy.current
       flashRef.current.visible = wantFlash && e > 0.02
       if (wantFlash && e > 0.02) {
