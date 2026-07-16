@@ -57,17 +57,32 @@ export class AudioEngine {
     this.source = 'none'
   }
 
-  /** Start microphone / line input. Throws if permission is denied. */
-  async startMic(): Promise<void> {
+  /** Currently selected input device id (undefined = system default). */
+  currentDeviceId: string | undefined = undefined
+
+  /** Start microphone / line input. Pass a deviceId to pick a specific input. */
+  async startMic(deviceId?: string): Promise<void> {
     const ctx = this.ensureContext()
     await ctx.resume()
     this.disconnectSource()
     this.micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+      },
     })
+    this.currentDeviceId = deviceId
     this.sourceNode = ctx.createMediaStreamSource(this.micStream)
     this.sourceNode.connect(this.gainNode!)
     this.source = 'mic'
+  }
+
+  /** Enumerate available audio input devices (labels require prior permission). */
+  async listInputs(): Promise<MediaDeviceInfo[]> {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    return devices.filter((d) => d.kind === 'audioinput')
   }
 
   /** Play a local audio file and analyze it (also routed to speakers). */

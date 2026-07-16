@@ -13,8 +13,24 @@ export function Panel() {
   const [tab, setTab] = useState<ParamGroup>('machine')
   const [source, setSource] = useState('none')
   const [error, setError] = useState<string | null>(null)
+  const [inputs, setInputs] = useState<MediaDeviceInfo[]>([])
+  const [deviceId, setDeviceId] = useState<string | undefined>(undefined)
   const midiSupported = useMidiStore((s) => s.supported)
   const learning = useMidiStore((s) => s.learning)
+
+  // Start the mic with a specific input device (undefined = system default),
+  // then refresh the device list so labels populate after permission is granted.
+  const startWithDevice = async (id?: string) => {
+    try {
+      await audioEngine.startMic(id)
+      const devs = await audioEngine.listInputs()
+      setInputs(devs)
+      setDeviceId(id)
+      setSource(devs.find((d) => d.deviceId === id)?.label ?? 'mic')
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
 
   useEffect(() => {
     useMidiStore.getState().init().catch((e: Error) => setError(`MIDI: ${e.message}`))
@@ -33,9 +49,20 @@ export function Panel() {
     <div className="panel">
       <div className="panel-header">
         <strong>VJ</strong>
-        <button onClick={() => audioEngine.startMic().then(() => setSource('mic'), (e) => setError(e.message))}>
-          Mic
-        </button>
+        <button onClick={() => startWithDevice(deviceId)}>Mic</button>
+        <select
+          className="device-select"
+          value={deviceId ?? ''}
+          onChange={(e) => startWithDevice(e.target.value || undefined)}
+          title="Audio input device"
+        >
+          <option value="">Default input</option>
+          {inputs.map((d) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label || d.deviceId}
+            </option>
+          ))}
+        </select>
         <label className="file-btn">
           File
           <input
