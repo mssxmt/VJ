@@ -1,5 +1,6 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { MachineObject } from './machine/MachineObject'
+import { KickBurst } from './machine/KickBurst'
 import { Effects } from './effects/Effects'
 import { CameraRig } from './camera/CameraRig'
 import { AutoPilot } from './control/auto'
@@ -22,6 +23,7 @@ export default function App() {
         <pointLight position={[-5, -5, -5]} intensity={0.5} />
         <AudioUpdater />
         <MachineObject />
+        <KickBurst />
         <CameraRig />
         <AutoPilot />
         <Effects />
