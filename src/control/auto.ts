@@ -25,15 +25,15 @@ export function AutoPilot() {
       // Slow LFO drift + audio push on effect intensities (modulation is in param units)
       modulation.set('effects.glitch', lfoValue('sine', t, 0.05) * 0.3 + audioFrame.onsetEnv * 0.3)
       modulation.set('effects.chroma', lfoValue('sine', t, 0.07, 0.3) * 0.2)
-      modulation.set(
-        'effects.pixelate',
-        Math.max(0, lfoValue('square', t, 0.02)) * audioFrame.onsetEnv * 0.5,
-      )
       const bloomDef = getParam('effects.bloom')
       modulation.set(
         'effects.bloom',
         lfoValue('sine', t, 0.03) * 0.3 * (bloomDef.max - bloomDef.min) * 0.2,
       )
+      // Stretch glitch: violent vertical/horizontal elongation snapping on
+      // onsets, alternating axis via the square LFO phase.
+      modulation.set('effects.stretchV', audioFrame.onsetEnv * Math.max(0, lfoValue('square', t, 0.5)) * 0.9)
+      modulation.set('effects.stretchH', audioFrame.onsetEnv * Math.max(0, lfoValue('square', t, 0.5, 0.5)) * 0.9)
     }
 
     if (effectiveValue('auto.machine') > 0.5 && audioFrame.onset) {
@@ -44,6 +44,14 @@ export function AutoPilot() {
         const s = useParamStore.getState()
         s.setParam('machine.seed', Math.floor(Math.random() * 9999))
       }
+    }
+
+    if (effectiveValue('auto.camera') > 0.5) {
+      // AUTO tumble: LFO-driven object spin on all three axes so the machine
+      // rotates continuously for hands-off viewing (offsets manual spin base).
+      modulation.set('machine.spinX', lfoValue('sine', t, 0.07) * 0.5)
+      modulation.set('machine.spinY', lfoValue('sine', t, 0.05, 0.25) * 0.6)
+      modulation.set('machine.spinZ', lfoValue('sine', t, 0.09, 0.6) * 0.3)
     }
   })
   return null

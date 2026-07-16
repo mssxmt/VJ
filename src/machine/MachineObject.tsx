@@ -6,27 +6,82 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { generateMachine, type MachinePart, type MachineConfig } from './generate'
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
 import { useParamStore, effectiveValue } from '../control/store'
 
+// --- Part geometries -------------------------------------------------------
+// bolt: revolved rivet profile (head + shaft).
+const BOLT_GEO = new THREE.LatheGeometry(
+  [
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(0.16, 0.0),
+    new THREE.Vector2(0.16, 0.04),
+    new THREE.Vector2(0.1, 0.04),
+    new THREE.Vector2(0.1, 0.16),
+    new THREE.Vector2(0.0, 0.16),
+  ],
+  12,
+)
+// cable: arcing tube (a wire/loop primitive).
+const CABLE_GEO = new THREE.TubeGeometry(
+  new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, -0.4, 0),
+    new THREE.Vector3(0.35, -0.1, 0.15),
+    new THREE.Vector3(0.3, 0.35, -0.15),
+    new THREE.Vector3(-0.1, 0.45, 0.1),
+    new THREE.Vector3(-0.4, 0.2, 0),
+  ]),
+  18,
+  0.045,
+  8,
+  false,
+)
+// vent: parallel fins merged into a grille.
+const VENT_GEO = (() => {
+  const fins: THREE.BufferGeometry[] = []
+  for (let i = 0; i < 6; i++) {
+    const f = new THREE.BoxGeometry(0.6, 0.03, 0.18)
+    f.translate(0, (i - 2.5) * 0.07, 0)
+    fins.push(f)
+  }
+  return mergeGeometries(fins)!
+})()
 const GEOMETRIES: Record<string, THREE.BufferGeometry> = {
   core: new THREE.BoxGeometry(1, 1, 1),
   box: new THREE.BoxGeometry(1, 1, 1),
   pipe: new THREE.CylinderGeometry(0.5, 0.5, 1, 10),
   fin: new THREE.BoxGeometry(1, 0.6, 0.05),
   antenna: new THREE.ConeGeometry(0.3, 1, 6),
-  ring: new THREE.TorusGeometry(0.5, 0.08, 8, 20),
+  ring: new THREE.TorusGeometry(0.5, 0.08, 20, 48), // smoothed (higher segments)
   greeble: new THREE.BoxGeometry(0.3, 0.3, 0.3),
   spike: new THREE.ConeGeometry(0.16, 1, 4), // sharp 4-sided pyramid thorn
+  bolt: BOLT_GEO,
+  cable: CABLE_GEO,
+  vent: VENT_GEO,
+  strut: new THREE.BoxGeometry(1, 1, 1),
 }
 
 const COL_MAIN = new THREE.Color('#b8bcc4')
 const COL_ACCENT = new THREE.Color('#5a5e66')
 const EMIT_MAIN = new THREE.Color('#cfe8ff')
 const EMIT_ACCENT = new THREE.Color('#fff0c0')
-const ACCENT_TYPES = new Set(['pipe', 'ring', 'greeble'])
+// Rounded parts render smooth-shaded (no flatShading); the rest stays faceted.
+const SMOOTH_TYPES = new Set(['ring', 'cable', 'bolt'])
+const ACCENT_TYPES = new Set(['pipe', 'ring', 'greeble', 'antenna', 'spike', 'bolt', 'cable'])
+
+function materialProps(type: string) {
+  const accent = ACCENT_TYPES.has(type)
+  return {
+    color: accent ? COL_ACCENT : COL_MAIN,
+    metalness: 0.9,
+    roughness: accent ? 0.45 : 0.26,
+    emissive: accent ? EMIT_ACCENT : EMIT_MAIN,
+    flatShading: !SMOOTH_TYPES.has(type),
+  }
+}
 
 interface FlatPart {
   part: MachinePart
@@ -132,6 +187,9 @@ export function MachineObject() {
   // clearing effect (clearing would break reused meshes — see scaleSpread bug).
   const meshRefs = useRef<THREE.Mesh[]>([])
   const matRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([])
+  // Root group ref: spun by machine.spinX/Y/Z so MIDI can tumble the object
+  // in any direction (and AUTO drives these via LFO).
+  const rootRef = useRef<THREE.Group>(null!)
   // Per-mesh scatter envelopes. Recreated (zeroed) when the part set changes.
   const env = useMemo(() => new Float32Array(copies.length * flat.length), [copies, flat])
 
@@ -142,8 +200,21 @@ export function MachineObject() {
   )
   const writeIdx = useRef(0)
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     const reactivity = effectiveValue('machine.reactivity')
+
+    if (rootRef.current) {
+      const d = Math.min(delta, 0.05) // clamp to avoid jumps on tab refocus
+      // Tumble from the spin params (base + AUTO modulation).
+      rootRef.current.rotation.x += effectiveValue('machine.spinX') * d
+      rootRef.current.rotation.y += effectiveValue('machine.spinY') * d
+      rootRef.current.rotation.z += effectiveValue('machine.spinZ') * d
+      // Stretch glitch: violently elongate the whole machine vertically (V)
+      // or horizontally (H). 0 = none, 1 = ~20x absurd stretch.
+      const sV = effectiveValue('effects.stretchV')
+      const sH = effectiveValue('effects.stretchH')
+      rootRef.current.scale.set(1 + sH * 19, 1 + sV * 19, 1 + sH * 19)
+    }
 
     // Record this frame's audio into the history ring buffer.
     const w = writeIdx.current
@@ -183,6 +254,7 @@ export function MachineObject() {
         const off = e * 1.1 * reactivity * sc.speed
         m.position.copy(fp.pos).addScaledVector(sc.escape, off)
         m.quaternion.copy(fp.quat)
+
         const punch = 1 + e * r.punch * 0.18 * reactivity
         m.scale.set(fp.scale.x * punch, fp.scale.y * punch, fp.scale.z * punch)
         if (mat) {
@@ -194,11 +266,10 @@ export function MachineObject() {
 
   let idx = 0
   return (
-    <group>
+    <group ref={rootRef}>
       {copies.map((c) => (
         <group key={c.key} position={c.position} rotation={c.rotation}>
           {flat.map((fp) => {
-            const accent = ACCENT_TYPES.has(fp.part.type)
             const i = idx++
             return (
               <mesh
@@ -215,12 +286,8 @@ export function MachineObject() {
                   ref={(m) => {
                     matRefs.current[i] = m
                   }}
-                  color={accent ? COL_ACCENT : COL_MAIN}
-                  metalness={0.9}
-                  roughness={accent ? 0.45 : 0.26}
-                  emissive={accent ? EMIT_ACCENT : EMIT_MAIN}
+                  {...materialProps(fp.part.type)}
                   emissiveIntensity={0}
-                  flatShading
                 />
               </mesh>
             )

@@ -2,22 +2,13 @@
 // from the param store (base + AUTO modulation) and the shared audio frame.
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import {
-  EffectComposer,
-  Bloom,
-  ChromaticAberration,
-  Glitch,
-  Noise,
-  Pixelation,
-  Scanline,
-} from '@react-three/postprocessing'
+import { EffectComposer, Bloom, ChromaticAberration, Glitch, Noise, Scanline } from '@react-three/postprocessing'
 import { GlitchMode } from 'postprocessing'
 import type {
   BloomEffect,
   ChromaticAberrationEffect,
   GlitchEffect,
   NoiseEffect,
-  PixelationEffect,
   ScanlineEffect,
 } from 'postprocessing'
 import { effectiveValue } from '../control/store'
@@ -28,7 +19,6 @@ export function Effects() {
   const chroma = useRef<ChromaticAberrationEffect>(null)
   const glitch = useRef<GlitchEffect>(null)
   const noise = useRef<NoiseEffect>(null)
-  const pixel = useRef<PixelationEffect>(null)
   const scan = useRef<ScanlineEffect>(null)
 
   useFrame(() => {
@@ -46,7 +36,6 @@ export function Effects() {
         audioFrame.onsetEnv * g > 0.25 ? GlitchMode.CONSTANT_WILD : GlitchMode.DISABLED
     }
     if (noise.current) noise.current.blendMode.opacity.value = effectiveValue('effects.noise')
-    if (pixel.current) pixel.current.granularity = effectiveValue('effects.pixelate') * 24
     if (scan.current) scan.current.blendMode.opacity.value = effectiveValue('effects.scanline')
   })
 
@@ -55,7 +44,6 @@ export function Effects() {
       <Bloom ref={bloom} luminanceThreshold={0.4} mipmapBlur intensity={1} />
       <ChromaticAberration ref={chroma} />
       <Glitch ref={glitch} mode={GlitchMode.DISABLED} />
-      <Pixelation ref={pixel} granularity={0} />
       <Scanline ref={scan} density={1.5} />
       <Noise ref={noise} premultiply />
     </EffectComposer>
