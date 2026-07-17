@@ -251,15 +251,19 @@ export function MachineObject() {
         e = Math.max(e, onset * sc.sensitivity * 0.7)
         env[ei] = e
 
-        // Scatter along this mesh's own escape direction, modulated by its envelope.
-        const off = e * 1.1 * reactivity * sc.speed
+        // Scatter along this mesh's own escape direction. Ease-out curve so
+        // parts burst out fast then decelerate as they spread further (organic,
+        // "slows as it opens") rather than moving at a constant rate.
+        const en = e < 1 ? e : 1
+        const eased = 1 - Math.pow(1 - en, 3)
+        const off = eased * 1.1 * reactivity * sc.speed
         m.position.copy(fp.pos).addScaledVector(sc.escape, off)
         m.quaternion.copy(fp.quat)
 
         const punch = 1 + e * r.punch * 0.18 * reactivity
         m.scale.set(fp.scale.x * punch, fp.scale.y * punch, fp.scale.z * punch)
         if (mat) {
-          mat.emissiveIntensity = e * r.flash * 3 * reactivity
+          mat.emissiveIntensity = e * r.flash * 0.5 * reactivity
         }
       }
     }

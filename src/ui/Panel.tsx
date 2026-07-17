@@ -13,8 +13,44 @@ export function Panel() {
   const [tab, setTab] = useState<ParamGroup>('machine')
   const [source, setSource] = useState('none')
   const [error, setError] = useState<string | null>(null)
+  const [inputs, setInputs] = useState<MediaDeviceInfo[]>([])
+  const [deviceId, setDeviceId] = useState<string | undefined>(undefined)
   const midiSupported = useMidiStore((s) => s.supported)
   const learning = useMidiStore((s) => s.learning)
+
+  // Enumerate inputs on mount. Labels stay empty until the first startMic
+  // grants permission, so show a positional placeholder until then.
+  useEffect(() => {
+    audioEngine.listInputs().then(setInputs).catch(() => {})
+  }, [])
+
+  // Pick a device -> start mic with it (this is the user gesture that triggers
+  // the permission prompt the first time), then refresh so labels fill in.
+  const selectInput = async (id: string | undefined) => {
+    try {
+      setError(null)
+      await audioEngine.startMic(id)
+      const devs = await audioEngine.listInputs()
+      setInputs(devs)
+      setDeviceId(id)
+      setSource(devs.find((d) => d.deviceId === id)?.label ?? 'default input')
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  const onDeviceChange = (v: string) => {
+    if (v === 'off') {
+      audioEngine.stop()
+      setSource('none')
+      setDeviceId(undefined)
+      setError(null)
+    } else {
+      void selectInput(v === '' ? undefined : v)
+    }
+  }
+
+  const selectValue = audioEngine.source !== 'mic' ? 'off' : deviceId ?? ''
 
   useEffect(() => {
     useMidiStore.getState().init().catch((e: Error) => setError(`MIDI: ${e.message}`))
@@ -33,9 +69,20 @@ export function Panel() {
     <div className="panel">
       <div className="panel-header">
         <strong>VJ</strong>
-        <button onClick={() => audioEngine.startMic().then(() => setSource('mic'), (e) => setError(e.message))}>
-          Mic
-        </button>
+        <select
+          className="device-select"
+          value={selectValue}
+          onChange={(e) => onDeviceChange(e.target.value)}
+          title="Audio input device (select to start)"
+        >
+          <option value="off">— input off —</option>
+          <option value="">Default input</option>
+          {inputs.map((d, i) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label || `Input ${i + 1}`}
+            </option>
+          ))}
+        </select>
         <label className="file-btn">
           File
           <input
