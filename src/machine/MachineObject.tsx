@@ -96,46 +96,38 @@ const GEOMETRIES: Record<string, THREE.BufferGeometry> = {
   bulb: new THREE.SphereGeometry(0.35, 24, 18),
   stalk: STALK_GEO,
   tendril: TENDRIL_GEO,
-  membrane: new THREE.SphereGeometry(2.0, 32, 24), // wrapping shell
 }
 
 const COL_MAIN = new THREE.Color('#b8bcc4')
 const COL_ACCENT = new THREE.Color('#5a5e66')
 const EMIT_MAIN = new THREE.Color('#cfe8ff')
 const EMIT_ACCENT = new THREE.Color('#fff0c0')
-// Organism: warm skin tones — main flesh, darker accent (stalks/tendrils),
-// translucent membrane shell.
-const COL_ORGANISM_MAIN = new THREE.Color('#cdb2a3')
-const COL_ORGANISM_ACCENT = new THREE.Color('#9a7a6a')
-const COL_ORGANISM_MEMBRANE = new THREE.Color('#b89580')
-const EMIT_ORGANISM_MAIN = new THREE.Color('#ffd0a0')
-const EMIT_ORGANISM_ACCENT = new THREE.Color('#ffb088')
-const EMIT_ORGANISM_MEMBRANE = new THREE.Color('#ffc098')
+// Organism: fluid metal / liquid mercury — polished chrome, fully smooth.
+const COL_ORGANISM_MAIN = new THREE.Color('#cdd4dc')
+const COL_ORGANISM_ACCENT = new THREE.Color('#80868d')
+const EMIT_ORGANISM_MAIN = new THREE.Color('#cfe6ff')
 // Rounded parts render smooth-shaded (no flatShading); the rest stays faceted.
-// Organism types are all smooth — they route through the pattern=='organism'
-// branch below, but adding them here keeps the fallback safe.
+// Organism types are all smooth.
 const SMOOTH_TYPES = new Set([
   'ring', 'cable', 'bolt',
-  'nucleus', 'blob', 'bulb', 'stalk', 'tendril', 'membrane',
+  'nucleus', 'blob', 'bulb', 'stalk', 'tendril',
 ])
 const ACCENT_TYPES = new Set(['pipe', 'ring', 'greeble', 'antenna', 'spike', 'bolt', 'cable'])
 const ORGANISM_ACCENT_TYPES = new Set(['stalk', 'tendril'])
 
 function materialProps(type: string, pattern: Pattern) {
   if (pattern === 'organism') {
-    // Organism is fully smooth, warm, near-matte so bloom + emissive carry
-    // the soft tissue read. Membrane is translucent so the interior blob
-    // cluster shows through the wrapping shell.
+    // Fluid metal / liquid mercury: high-polish chrome, fully smooth. Bloom
+    // + emissive pick up the cool highlights.
     const accent = ORGANISM_ACCENT_TYPES.has(type)
-    const isMembrane = type === 'membrane'
     return {
-      color: isMembrane ? COL_ORGANISM_MEMBRANE : accent ? COL_ORGANISM_ACCENT : COL_ORGANISM_MAIN,
-      metalness: 0.05,
-      roughness: isMembrane ? 0.95 : accent ? 0.85 : 0.65,
-      emissive: isMembrane ? EMIT_ORGANISM_MEMBRANE : accent ? EMIT_ORGANISM_ACCENT : EMIT_ORGANISM_MAIN,
+      color: accent ? COL_ORGANISM_ACCENT : COL_ORGANISM_MAIN,
+      metalness: 1.0,
+      roughness: accent ? 0.3 : 0.12,
+      emissive: EMIT_ORGANISM_MAIN,
       flatShading: false,
-      transparent: isMembrane,
-      opacity: isMembrane ? 0.3 : 1,
+      transparent: false,
+      opacity: 1,
     }
   }
   const accent = ACCENT_TYPES.has(type)

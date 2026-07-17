@@ -50,19 +50,8 @@ describe('generateOrganism', () => {
   it('root is a nucleus', () => {
     expect(generateOrganism(organismConfig).type).toBe('nucleus')
   })
-  it('includes exactly one membrane shell when partCount > 1', () => {
-    const countMembranes = (p: ReturnType<typeof generateOrganism>): number =>
-      (p.type === 'membrane' ? 1 : 0) + p.children.reduce((n, c) => n + countMembranes(c), 0)
-    expect(countMembranes(generateOrganism(organismConfig))).toBe(1)
-    expect(countMembranes(generateOrganism({ ...organismConfig, partCount: 4 }))).toBe(1)
-  })
-  it('omits the membrane when partCount === 1', () => {
-    const root = generateOrganism({ ...organismConfig, partCount: 1 })
-    expect(root.type).toBe('nucleus')
-    expect(root.children).toHaveLength(0)
-  })
-  it('only uses organism part types', () => {
-    const allowed = new Set(['nucleus', 'blob', 'bulb', 'stalk', 'tendril', 'membrane'])
+  it('omits large cyst-like parts (no membrane) and uses only organism types', () => {
+    const allowed = new Set(['nucleus', 'blob', 'bulb', 'stalk', 'tendril'])
     const walk = (p: ReturnType<typeof generateOrganism>): void => {
       expect(allowed.has(p.type)).toBe(true)
       p.children.forEach(walk)

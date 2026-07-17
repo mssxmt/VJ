@@ -13,13 +13,12 @@ export type PartType =
   | 'cable'
   | 'vent'
   | 'strut'
-  // organism part types — smooth, organic masses and reaching tendrils
+  // organism part types — smooth fluid-metal masses and flowing tendrils
   | 'nucleus'
   | 'blob'
   | 'bulb'
   | 'stalk'
   | 'tendril'
-  | 'membrane'
 
 /** Live switch between the two rendered object patterns. */
 export type Pattern = 'machine' | 'organism'
@@ -71,18 +70,17 @@ const CHILD_TYPES: readonly PartType[] = [
   'strut',
 ]
 
-// Organism children: blob weighted heavy so overlapping rounded masses
-// dominate; membrane is placed separately (always exactly one wrapping shell)
-// so it is NOT in this list.
+// Organism children: flowing tubes (stalk/tendril) dominate for a liquid-metal
+// strand look; small blobs/bulbs cluster as droplets. No large wrapping shell —
+// nothing cyst-like.
 const ORGANISM_CHILD_TYPES: readonly PartType[] = [
-  'blob',
-  'blob',
-  'blob',
-  'blob',
-  'bulb',
-  'bulb',
+  'stalk',
   'stalk',
   'tendril',
+  'tendril',
+  'blob',
+  'blob',
+  'bulb',
 ]
 
 const BANDS: readonly Band[] = ['low', 'mid', 'high']
@@ -139,7 +137,8 @@ export function generateMachine(config: MachineConfig): MachinePart {
  * Organic alternative to generateMachine. Returns the SAME MachinePart tree
  * shape so flatten/renderer/scatter/useFrame are reused unchanged — only the
  * types, geometry, and material set differ. Continuous rotations + tight
- * spread (overlapping blobs) + a wrapping membrane shell read as one smooth
+ * spread + flowing tubes (stalk/tendril) with small droplet blobs read as one
+ * smooth fluid-metal mass, NOT a crystal/geode and not a pile of cysts.
  * organic mass, NOT a crystal/geode.
  */
 export function generateOrganism(config: MachineConfig): MachinePart {
@@ -162,35 +161,22 @@ export function generateOrganism(config: MachineConfig): MachinePart {
   })
 
   const root = makePart('nucleus')
-  root.scale = [1.4, 1.4, 1.4]
+  root.scale = [1.0, 1.0, 1.0]
   const all: MachinePart[] = [root]
-
-  // Always place exactly one wrapping membrane shell (if room allows) so the
-  // overlapping blob cluster reads as a single unified mass rather than a
-  // pile of marbles. Hugging near the nucleus center, larger than the blobs.
-  if (config.partCount > 1) {
-    const membrane = makePart('membrane')
-    membrane.position = [range(rng, -0.1, 0.1), range(rng, -0.1, 0.1), range(rng, -0.1, 0.1)]
-    const ms = range(rng, 1.6, 2.2)
-    membrane.scale = [ms, ms, ms]
-    membrane.rotation = [rng() * Math.PI * 2, rng() * Math.PI * 2, rng() * Math.PI * 2]
-    root.children.push(membrane)
-    all.push(membrane)
-  }
 
   while (all.length < config.partCount) {
     const parent =
       rng() < config.complexity ? all[all.length - 1 - Math.floor(rng() * Math.min(5, all.length))] : root
     const part = makePart(pick(rng, ORGANISM_CHILD_TYPES))
-    // Tighter spread than the machine so rounded blobs overlap into a mass.
+    // Tighter spread than the machine so droplets/strands overlap into a mass.
     const spread = 0.35 + config.complexity * 0.4
     part.position = [range(rng, -spread, spread), range(rng, -spread, spread), range(rng, -spread, spread)]
     if (part.type === 'stalk' || part.type === 'tendril') {
-      // Thin-elongate along Y for organic stalk/tendril reach.
-      part.scale = [0.25, range(rng, 1, 2.5), 0.25]
+      // Thin-elongate along Y for flowing liquid-metal strands.
+      part.scale = [0.22, range(rng, 1.2, 3.0), 0.22]
     } else {
-      // blob / bulb: rounded, overlapping masses.
-      const s = range(rng, 0.4, 1.3)
+      // blob / bulb: small droplets (kept small — no big cysts).
+      const s = range(rng, 0.3, 0.8)
       part.scale = [s, s, s]
     }
     // Continuous rotations — no 90° facets, fully organic silhouette.
