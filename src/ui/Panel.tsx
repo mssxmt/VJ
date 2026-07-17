@@ -112,7 +112,7 @@ export function Panel() {
         ))}
       </div>
       {!midiSupported && <div className="hint">Web MIDI not supported in this browser</div>}
-      <div className="hint">H: hide UI / F: fullscreen / Space: AUTO / R: regenerate / G,B: effects / 1-9: seeds</div>
+      <div className="hint">H: hide UI / F: fullscreen / Space: AUTO / R: regenerate / G,B: effects / P: pattern / 1-9: seeds</div>
     </div>
   )
 }

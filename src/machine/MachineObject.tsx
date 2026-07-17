@@ -7,7 +7,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { generateMachine, type MachinePart, type MachineConfig } from './generate'
+import { generateMachine, generateOrganism, type MachinePart, type MachineConfig, type Pattern } from './generate'
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
 import { useParamStore, effectiveValue } from '../control/store'
@@ -49,6 +49,34 @@ const VENT_GEO = (() => {
   }
   return mergeGeometries(fins)!
 })()
+// stalk / tendril: organic tubes along a Catmull-Rom curve (no straight lines).
+const STALK_GEO = new THREE.TubeGeometry(
+  new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, -0.5, 0),
+    new THREE.Vector3(0.1, -0.2, 0.05),
+    new THREE.Vector3(-0.08, 0.1, -0.05),
+    new THREE.Vector3(0.05, 0.4, 0.03),
+    new THREE.Vector3(0, 0.5, 0),
+  ]),
+  24,
+  0.06,
+  12,
+  false,
+)
+const TENDRIL_GEO = new THREE.TubeGeometry(
+  new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, -0.6, 0),
+    new THREE.Vector3(0.15, -0.3, 0.1),
+    new THREE.Vector3(-0.15, 0, -0.1),
+    new THREE.Vector3(0.2, 0.3, 0.05),
+    new THREE.Vector3(-0.1, 0.55, -0.08),
+    new THREE.Vector3(0.05, 0.7, 0),
+  ]),
+  32,
+  0.04,
+  12,
+  false,
+)
 const GEOMETRIES: Record<string, THREE.BufferGeometry> = {
   core: new THREE.BoxGeometry(1, 1, 1),
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -62,17 +90,54 @@ const GEOMETRIES: Record<string, THREE.BufferGeometry> = {
   cable: CABLE_GEO,
   vent: VENT_GEO,
   strut: new THREE.BoxGeometry(1, 1, 1),
+  // organism: all smooth, high-segment geometry (no crystalline facets).
+  nucleus: new THREE.IcosahedronGeometry(1.0, 4),
+  blob: new THREE.IcosahedronGeometry(0.7, 3),
+  bulb: new THREE.SphereGeometry(0.35, 24, 18),
+  stalk: STALK_GEO,
+  tendril: TENDRIL_GEO,
+  membrane: new THREE.SphereGeometry(2.0, 32, 24), // wrapping shell
 }
 
 const COL_MAIN = new THREE.Color('#b8bcc4')
 const COL_ACCENT = new THREE.Color('#5a5e66')
 const EMIT_MAIN = new THREE.Color('#cfe8ff')
 const EMIT_ACCENT = new THREE.Color('#fff0c0')
+// Organism: warm skin tones — main flesh, darker accent (stalks/tendrils),
+// translucent membrane shell.
+const COL_ORGANISM_MAIN = new THREE.Color('#cdb2a3')
+const COL_ORGANISM_ACCENT = new THREE.Color('#9a7a6a')
+const COL_ORGANISM_MEMBRANE = new THREE.Color('#b89580')
+const EMIT_ORGANISM_MAIN = new THREE.Color('#ffd0a0')
+const EMIT_ORGANISM_ACCENT = new THREE.Color('#ffb088')
+const EMIT_ORGANISM_MEMBRANE = new THREE.Color('#ffc098')
 // Rounded parts render smooth-shaded (no flatShading); the rest stays faceted.
-const SMOOTH_TYPES = new Set(['ring', 'cable', 'bolt'])
+// Organism types are all smooth — they route through the pattern=='organism'
+// branch below, but adding them here keeps the fallback safe.
+const SMOOTH_TYPES = new Set([
+  'ring', 'cable', 'bolt',
+  'nucleus', 'blob', 'bulb', 'stalk', 'tendril', 'membrane',
+])
 const ACCENT_TYPES = new Set(['pipe', 'ring', 'greeble', 'antenna', 'spike', 'bolt', 'cable'])
+const ORGANISM_ACCENT_TYPES = new Set(['stalk', 'tendril'])
 
-function materialProps(type: string) {
+function materialProps(type: string, pattern: Pattern) {
+  if (pattern === 'organism') {
+    // Organism is fully smooth, warm, near-matte so bloom + emissive carry
+    // the soft tissue read. Membrane is translucent so the interior blob
+    // cluster shows through the wrapping shell.
+    const accent = ORGANISM_ACCENT_TYPES.has(type)
+    const isMembrane = type === 'membrane'
+    return {
+      color: isMembrane ? COL_ORGANISM_MEMBRANE : accent ? COL_ORGANISM_ACCENT : COL_ORGANISM_MAIN,
+      metalness: 0.05,
+      roughness: isMembrane ? 0.95 : accent ? 0.85 : 0.65,
+      emissive: isMembrane ? EMIT_ORGANISM_MEMBRANE : accent ? EMIT_ORGANISM_ACCENT : EMIT_ORGANISM_MAIN,
+      flatShading: false,
+      transparent: isMembrane,
+      opacity: isMembrane ? 0.3 : 1,
+    }
+  }
   const accent = ACCENT_TYPES.has(type)
   return {
     color: accent ? COL_ACCENT : COL_MAIN,
@@ -80,6 +145,8 @@ function materialProps(type: string) {
     roughness: accent ? 0.45 : 0.26,
     emissive: accent ? EMIT_ACCENT : EMIT_MAIN,
     flatShading: !SMOOTH_TYPES.has(type),
+    transparent: false,
+    opacity: 1,
   }
 }
 
@@ -129,12 +196,14 @@ function flatten(root: MachinePart): FlatPart[] {
 }
 
 /** Build a unique scatter profile per (copy, part) so every mesh — including
- *  across symmetry copies — moves independently. Core stays anchored. */
+ *  across symmetry copies — moves independently. Root (core / nucleus) stays
+ *  anchored as the center parts fly from. */
 function buildScatter(copies: number, flat: FlatPart[]): Scatter[] {
   const arr: Scatter[] = []
   for (let c = 0; c < copies; c++) {
     for (let p = 0; p < flat.length; p++) {
-      const isCore = flat[p].part.type === 'core'
+      // Both pattern roots stay anchored: machine 'core' and organism 'nucleus'.
+      const isCore = flat[p].part.type === 'core' || flat[p].part.type === 'nucleus'
       const r = createRng((((c + 1) * 73856093) ^ (flat[p].part.id * 2654435761)) >>> 0)
       arr.push({
         escape: new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1).normalize(),
@@ -152,6 +221,7 @@ export function MachineObject() {
   const values = useParamStore((s) => s.values)
   const config: MachineConfig = {
     seed: values['machine.seed'],
+    pattern: values['machine.pattern'] > 0.5 ? 'organism' : 'machine',
     complexity: values['machine.complexity'],
     partCount: Math.round(values['machine.partCount']),
     symmetry: Math.round(values['machine.symmetry']),
@@ -159,9 +229,9 @@ export function MachineObject() {
   }
 
   const flat = useMemo(
-    () => flatten(generateMachine(config)),
+    () => flatten(config.pattern === 'organism' ? generateOrganism(config) : generateMachine(config)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- regenerate only on structural value changes
-    [config.seed, config.complexity, config.partCount, config.symmetry, config.scaleSpread],
+    [config.pattern, config.seed, config.complexity, config.partCount, config.symmetry, config.scaleSpread],
   )
 
   // Symmetry copies with a slight per-copy break.
@@ -291,7 +361,7 @@ export function MachineObject() {
                   ref={(m) => {
                     matRefs.current[i] = m
                   }}
-                  {...materialProps(fp.part.type)}
+                  {...materialProps(fp.part.type, config.pattern)}
                   emissiveIntensity={0}
                 />
               </mesh>

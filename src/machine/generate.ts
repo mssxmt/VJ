@@ -13,6 +13,17 @@ export type PartType =
   | 'cable'
   | 'vent'
   | 'strut'
+  // organism part types — smooth, organic masses and reaching tendrils
+  | 'nucleus'
+  | 'blob'
+  | 'bulb'
+  | 'stalk'
+  | 'tendril'
+  | 'membrane'
+
+/** Live switch between the two rendered object patterns. */
+export type Pattern = 'machine' | 'organism'
+
 export type Band = 'low' | 'mid' | 'high'
 
 export interface Reactivity {
@@ -37,6 +48,7 @@ export interface MachinePart {
 
 export interface MachineConfig {
   seed: number
+  pattern: Pattern
   complexity: number   // 0..1: tree depth / clustering
   partCount: number    // total parts (before symmetry mirroring at render time)
   symmetry: number     // 1..8: radial copies applied by the renderer
@@ -58,6 +70,21 @@ const CHILD_TYPES: readonly PartType[] = [
   'vent',
   'strut',
 ]
+
+// Organism children: blob weighted heavy so overlapping rounded masses
+// dominate; membrane is placed separately (always exactly one wrapping shell)
+// so it is NOT in this list.
+const ORGANISM_CHILD_TYPES: readonly PartType[] = [
+  'blob',
+  'blob',
+  'blob',
+  'blob',
+  'bulb',
+  'bulb',
+  'stalk',
+  'tendril',
+]
+
 const BANDS: readonly Band[] = ['low', 'mid', 'high']
 
 export function countParts(root: MachinePart): number {
@@ -102,6 +129,72 @@ export function generateMachine(config: MachineConfig): MachinePart {
     // Elongate rods/struts along one axis for a mechanical silhouette
     const elongate = part.type === 'pipe' || part.type === 'antenna' || part.type === 'spike' || part.type === 'strut'
     part.scale = elongate ? [s * 0.15, s * range(rng, 1, 3), s * 0.15] : [s, s, s]
+    parent.children.push(part)
+    all.push(part)
+  }
+  return root
+}
+
+/**
+ * Organic alternative to generateMachine. Returns the SAME MachinePart tree
+ * shape so flatten/renderer/scatter/useFrame are reused unchanged — only the
+ * types, geometry, and material set differ. Continuous rotations + tight
+ * spread (overlapping blobs) + a wrapping membrane shell read as one smooth
+ * organic mass, NOT a crystal/geode.
+ */
+export function generateOrganism(config: MachineConfig): MachinePart {
+  const rng = createRng(config.seed)
+  let nextId = 0
+  // Softer reactivity than the machine: gentler punch, slower spin.
+  const makePart = (type: PartType): MachinePart => ({
+    id: nextId++,
+    type,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    reactivity: {
+      band: pick(rng, BANDS),
+      punch: range(rng, 0.15, 0.7),
+      spin: range(rng, -0.5, 0.5),
+      flash: range(rng, 0, 1),
+    },
+    children: [],
+  })
+
+  const root = makePart('nucleus')
+  root.scale = [1.4, 1.4, 1.4]
+  const all: MachinePart[] = [root]
+
+  // Always place exactly one wrapping membrane shell (if room allows) so the
+  // overlapping blob cluster reads as a single unified mass rather than a
+  // pile of marbles. Hugging near the nucleus center, larger than the blobs.
+  if (config.partCount > 1) {
+    const membrane = makePart('membrane')
+    membrane.position = [range(rng, -0.1, 0.1), range(rng, -0.1, 0.1), range(rng, -0.1, 0.1)]
+    const ms = range(rng, 1.6, 2.2)
+    membrane.scale = [ms, ms, ms]
+    membrane.rotation = [rng() * Math.PI * 2, rng() * Math.PI * 2, rng() * Math.PI * 2]
+    root.children.push(membrane)
+    all.push(membrane)
+  }
+
+  while (all.length < config.partCount) {
+    const parent =
+      rng() < config.complexity ? all[all.length - 1 - Math.floor(rng() * Math.min(5, all.length))] : root
+    const part = makePart(pick(rng, ORGANISM_CHILD_TYPES))
+    // Tighter spread than the machine so rounded blobs overlap into a mass.
+    const spread = 0.35 + config.complexity * 0.4
+    part.position = [range(rng, -spread, spread), range(rng, -spread, spread), range(rng, -spread, spread)]
+    if (part.type === 'stalk' || part.type === 'tendril') {
+      // Thin-elongate along Y for organic stalk/tendril reach.
+      part.scale = [0.25, range(rng, 1, 2.5), 0.25]
+    } else {
+      // blob / bulb: rounded, overlapping masses.
+      const s = range(rng, 0.4, 1.3)
+      part.scale = [s, s, s]
+    }
+    // Continuous rotations — no 90° facets, fully organic silhouette.
+    part.rotation = [rng() * Math.PI * 2, rng() * Math.PI * 2, rng() * Math.PI * 2]
     parent.children.push(part)
     all.push(part)
   }

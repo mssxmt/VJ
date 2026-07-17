@@ -30,6 +30,9 @@ export function handleKey(key: string): boolean {
     case 'b':
       toggleParam('effects.bloom')
       return true
+    case 'p':
+      toggleParam('machine.pattern')
+      return true
     case '1':
     case '2':
     case '3':
