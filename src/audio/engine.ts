@@ -20,6 +20,12 @@ export class AudioEngine {
   private freqData: Float32Array<ArrayBuffer> = new Float32Array(0)
   private timeData: Float32Array<ArrayBuffer> = new Float32Array(0)
   source: AudioSource = 'none'
+  /**
+   * Monotonic id for in-flight mic requests. Incremented on every disconnect
+   * so a slow getUserMedia that is superseded (rapid device switch, or a stop
+   * while pending) can be detected and its stream discarded instead of leaked.
+   */
+  private micStartId = 0
 
   private ensureContext(): AudioContext {
     if (!this.ctx) {
@@ -37,10 +43,13 @@ export class AudioEngine {
   }
 
   private disconnectSource(): void {
+    // Invalidate any in-flight mic request so its later resolution is discarded.
+    this.micStartId++
     this.sourceNode?.disconnect()
     this.sourceNode = null
     this.micStream?.getTracks().forEach((t) => t.stop())
     this.micStream = null
+    this.currentDeviceId = undefined
     if (this.fileEl) {
       this.fileEl.pause()
       this.fileEl = null
@@ -65,7 +74,8 @@ export class AudioEngine {
     const ctx = this.ensureContext()
     await ctx.resume()
     this.disconnectSource()
-    this.micStream = await navigator.mediaDevices.getUserMedia({
+    const startId = this.micStartId
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
@@ -73,6 +83,13 @@ export class AudioEngine {
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       },
     })
+    // A newer startMic / a stop superseded this request: release the stream
+    // and leave engine state untouched (no leak, no overwrite).
+    if (this.micStartId !== startId) {
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+    this.micStream = stream
     this.currentDeviceId = deviceId
     this.sourceNode = ctx.createMediaStreamSource(this.micStream)
     this.sourceNode.connect(this.gainNode!)

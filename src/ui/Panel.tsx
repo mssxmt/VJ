@@ -28,6 +28,7 @@ export function Panel() {
   // the permission prompt the first time), then refresh so labels fill in.
   const selectInput = async (id: string | undefined) => {
     try {
+      setError(null)
       await audioEngine.startMic(id)
       const devs = await audioEngine.listInputs()
       setInputs(devs)
@@ -43,12 +44,13 @@ export function Panel() {
       audioEngine.stop()
       setSource('none')
       setDeviceId(undefined)
+      setError(null)
     } else {
       void selectInput(v === '' ? undefined : v)
     }
   }
 
-  const selectValue = source === 'none' ? 'off' : deviceId ?? ''
+  const selectValue = audioEngine.source !== 'mic' ? 'off' : deviceId ?? ''
 
   useEffect(() => {
     useMidiStore.getState().init().catch((e: Error) => setError(`MIDI: ${e.message}`))
