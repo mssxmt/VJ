@@ -171,12 +171,14 @@ export function generateOrganism(config: MachineConfig): MachinePart {
     // Tighter spread than the machine so droplets/strands overlap into a mass.
     const spread = 0.35 + config.complexity * 0.4
     part.position = [range(rng, -spread, spread), range(rng, -spread, spread), range(rng, -spread, spread)]
+    // scaleSpread controls size variance (same knob as the machine pattern).
+    const variance = 1 - config.scaleSpread * rng()
     if (part.type === 'stalk' || part.type === 'tendril') {
       // Thin-elongate along Y for flowing liquid-metal strands.
-      part.scale = [0.22, range(rng, 1.2, 3.0), 0.22]
+      part.scale = [0.22 * variance, range(rng, 1.2, 3.0) * variance, 0.22 * variance]
     } else {
       // blob / bulb: small droplets (kept small — no big cysts).
-      const s = range(rng, 0.3, 0.8)
+      const s = range(rng, 0.3, 0.8) * variance
       part.scale = [s, s, s]
     }
     // Continuous rotations — no 90° facets, fully organic silhouette.
