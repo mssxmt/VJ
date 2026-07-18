@@ -14,6 +14,7 @@ export interface ParamDef {
 
 export const PARAMS: readonly ParamDef[] = [
   // machine
+  { id: 'machine.pattern', label: 'Pattern', group: 'machine', min: 0, max: 1, default: 0, step: 1, toggle: true },
   { id: 'machine.seed', label: 'Seed', group: 'machine', min: 0, max: 9999, default: 1, step: 1 },
   { id: 'machine.complexity', label: 'Complexity', group: 'machine', min: 0, max: 1, default: 0.6 },
   { id: 'machine.partCount', label: 'Parts', group: 'machine', min: 4, max: 120, default: 40, step: 1 },
