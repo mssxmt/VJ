@@ -61,6 +61,9 @@ export function EmpBeam() {
   // the beam fires on high-band transients (hi-hats etc.) without needing the
   // broadband spectral-flux onset (which narrow-band highs often don't trip).
   const highBase = useRef(0)
+  // Latch: a sustained high-band event fires once per rising edge, not every
+  // MIN_INTERVAL while it stays above the baseline.
+  const highAboveBaseline = useRef(false)
   // Orient group: the beam shaft follows the machine's tumble (not world-fixed).
   const orientRef = useRef<THREE.Group>(null!)
 
@@ -89,8 +92,11 @@ export function EmpBeam() {
     // Track a slow average of the high band for rising-edge detection.
     const baseA = 1 - Math.pow(0.965, delta * 60)
     highBase.current += (high - highBase.current) * baseA
-    // Fire on a high-band rising edge OR a global onset with high content.
-    const highRise = high > HIGH_FLOOR && high > highBase.current * HIGH_REL
+    // Fire only on the false->true threshold crossing (latched) so a sustained
+    // high-band event fires once per rising edge, not every MIN_INTERVAL.
+    const aboveBaseline = high > HIGH_FLOOR && high > highBase.current * HIGH_REL
+    const highRise = aboveBaseline && !highAboveBaseline.current
+    highAboveBaseline.current = aboveBaseline
     const globalHit = audioFrame.onset && high > HIGH_FLOOR
     const pulse = (highRise || globalHit) && t - lastPulse.current > MIN_INTERVAL
     if (pulse) {
@@ -98,8 +104,10 @@ export function EmpBeam() {
       const strength = 0.55 + Math.min(1, high) * 0.6
       next = Math.max(next, strength)
 
-      // Spawn sparks along the (current) beam shaft.
-      const halfLen = length.current / 2
+      // Spawn sparks along the visible shaft. Use the post-growth length so the
+      // first pulse (length still ~0) distributes along the beam, not at center.
+      const postGrowthLength = length.current + (MAX_LEN - length.current) * Math.min(1, delta * 26)
+      const halfLen = postGrowthLength / 2
       const burst = Math.round(16 + strength * 22)
       for (let i = 0; i < burst; i++) {
         const s = sparks[nextSpark.current]
