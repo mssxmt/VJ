@@ -8,6 +8,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { audioFrame } from '../audio/frame'
 import { effectiveValue } from '../control/store'
+import { machineOrientation } from './orientation'
 
 const HIGH_FLOOR = 0.09 // absolute floor below which highs can't fire
 const HIGH_REL = 1.7 // high must exceed this x its recent average (rising edge)
@@ -60,6 +61,8 @@ export function EmpBeam() {
   // the beam fires on high-band transients (hi-hats etc.) without needing the
   // broadband spectral-flux onset (which narrow-band highs often don't trip).
   const highBase = useRef(0)
+  // Orient group: the beam shaft follows the machine's tumble (not world-fixed).
+  const orientRef = useRef<THREE.Group>(null!)
 
   const sparks = useMemo<Spark[]>(
     () =>
@@ -75,6 +78,10 @@ export function EmpBeam() {
     const want = effectiveValue('effects.empBeam') > 0.5
     const t = state.clock.elapsedTime
     const high = audioFrame.high
+
+    // Follow the machine's tumble so the beam is "up/down" relative to the
+    // machine, not world-fixed.
+    if (orientRef.current) orientRef.current.quaternion.copy(machineOrientation.quaternion)
 
     // Energy (opacity driver): continuous high-band glow + transient spike.
     let next = energy.current * Math.pow(0.86, delta * 60)
@@ -151,7 +158,7 @@ export function EmpBeam() {
   })
 
   return (
-    <group>
+    <group ref={orientRef}>
       <mesh ref={beamRef} geometry={BEAM_GEO} visible={false}>
         <meshBasicMaterial
           ref={matRef}

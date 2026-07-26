@@ -11,6 +11,7 @@ import { generateMachine, generateOrganism, type MachinePart, type MachineConfig
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
 import { useParamStore, effectiveValue } from '../control/store'
+import { machineOrientation } from './orientation'
 
 // --- Part geometries -------------------------------------------------------
 // bolt: revolved rivet profile (head + shaft).
@@ -276,6 +277,9 @@ export function MachineObject() {
       const sV = effectiveValue('effects.stretchV')
       const sH = effectiveValue('effects.stretchH')
       rootRef.current.scale.set(1 + sH * 19, 1 + sV * 19, 1 + sH * 19)
+      // Publish the tumble orientation so world-space effects (EMP beam) can
+      // follow the machine's facing instead of being locked to world axes.
+      machineOrientation.quaternion.copy(rootRef.current.quaternion)
     }
 
     // Record this frame's audio into the history ring buffer.
