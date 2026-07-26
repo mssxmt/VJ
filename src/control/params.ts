@@ -34,6 +34,7 @@ export const PARAMS: readonly ParamDef[] = [
   { id: 'effects.kickRings', label: 'Kick Rings', group: 'effects', min: 0, max: 1, default: 1, toggle: true },
   { id: 'effects.kickParticles', label: 'Kick Particles', group: 'effects', min: 0, max: 1, default: 0, toggle: true },
   { id: 'effects.kickFlash', label: 'Kick Flash', group: 'effects', min: 0, max: 1, default: 1, toggle: true },
+  { id: 'effects.empBeam', label: 'EMP Beam', group: 'effects', min: 0, max: 1, default: 1, toggle: true },
   // whole-object stretch glitch (violent vertical / horizontal elongation)
   { id: 'effects.stretchV', label: 'Stretch V', group: 'effects', min: 0, max: 1, default: 0 },
   { id: 'effects.stretchH', label: 'Stretch H', group: 'effects', min: 0, max: 1, default: 0 },
