@@ -9,7 +9,8 @@ import * as THREE from 'three'
 import { audioFrame } from '../audio/frame'
 import { effectiveValue } from '../control/store'
 
-const HIGH_GATE = 0.18
+const HIGH_FLOOR = 0.09 // absolute floor below which highs can't fire
+const HIGH_REL = 1.7 // high must exceed this x its recent average (rising edge)
 const MIN_INTERVAL = 0.06
 const MAX_LEN = 200 // long enough to extend well off-screen
 const BEAM_COLOR = new THREE.Color('#bfeaff')
@@ -51,9 +52,14 @@ export function EmpBeam() {
 
   const energy = useRef(0)
   const length = useRef(0)
+  const burstWidth = useRef(0)
   const lastPulse = useRef(0)
   const sparkEnergy = useRef(0)
   const nextSpark = useRef(0)
+  // Slow average of the high band — the baseline for rising-edge detection so
+  // the beam fires on high-band transients (hi-hats etc.) without needing the
+  // broadband spectral-flux onset (which narrow-band highs often don't trip).
+  const highBase = useRef(0)
 
   const sparks = useMemo<Spark[]>(
     () =>
@@ -73,7 +79,13 @@ export function EmpBeam() {
     // Energy (opacity driver): continuous high-band glow + transient spike.
     let next = energy.current * Math.pow(0.86, delta * 60)
     next = Math.max(next, Math.pow(high, 1.4) * 0.7)
-    const pulse = audioFrame.onset && high > HIGH_GATE && t - lastPulse.current > MIN_INTERVAL
+    // Track a slow average of the high band for rising-edge detection.
+    const baseA = 1 - Math.pow(0.965, delta * 60)
+    highBase.current += (high - highBase.current) * baseA
+    // Fire on a high-band rising edge OR a global onset with high content.
+    const highRise = high > HIGH_FLOOR && high > highBase.current * HIGH_REL
+    const globalHit = audioFrame.onset && high > HIGH_FLOOR
+    const pulse = (highRise || globalHit) && t - lastPulse.current > MIN_INTERVAL
     if (pulse) {
       lastPulse.current = t
       const strength = 0.55 + Math.min(1, high) * 0.6
@@ -90,8 +102,12 @@ export function EmpBeam() {
         nextSpark.current = (nextSpark.current + 1) % SPARK_COUNT
       }
       sparkEnergy.current = Math.max(sparkEnergy.current, strength)
+      // Flash thick on the firing moment; decays back to the steady width.
+      burstWidth.current = Math.max(burstWidth.current, 4.5)
     }
     energy.current = next
+    // Burst width eases back to 0 (frame-rate independent).
+    burstWidth.current *= Math.pow(0.82, delta * 60)
 
     // Length: extend toward MAX_LEN while alive; collapse only once faded
     // (opacity ~0 then), so the beam FADES at full length instead of retracting.
@@ -106,7 +122,9 @@ export function EmpBeam() {
       m.visible = on
       if (on) {
         const flicker = 0.82 + 0.18 * Math.sin(t * 53) * Math.cos(t * 37)
-        m.scale.set(1 + next * 0.5, length.current, 1 + next * 0.5)
+        // Steady width from energy + a momentary thick burst on fire.
+        const r = 1 + next * 0.5 + burstWidth.current
+        m.scale.set(r, length.current, r)
         mat.opacity = next * flicker
       }
     }
