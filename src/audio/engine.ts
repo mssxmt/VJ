@@ -17,6 +17,7 @@ export class AudioEngine {
   private fileEl: HTMLAudioElement | null = null
   private objectUrl: string | null = null
   private flux: SpectralFlux | null = null
+  private recDest: MediaStreamAudioDestinationNode | null = null
   private freqData: Float32Array<ArrayBuffer> = new Float32Array(0)
   private timeData: Float32Array<ArrayBuffer> = new Float32Array(0)
   source: AudioSource = 'none'
@@ -35,6 +36,10 @@ export class AudioEngine {
       this.analyser.smoothingTimeConstant = 0.5
       this.gainNode = this.ctx.createGain()
       this.gainNode.connect(this.analyser)
+      // Recording tap: mirrors the analyzed signal (mic / line / file) so a
+      // MediaRecorder can capture the audio the visuals react to.
+      this.recDest = this.ctx.createMediaStreamDestination()
+      this.gainNode.connect(this.recDest)
       this.freqData = new Float32Array(this.analyser.frequencyBinCount)
       this.timeData = new Float32Array(this.analyser.fftSize)
       this.flux = new SpectralFlux(this.analyser.frequencyBinCount)
@@ -100,6 +105,11 @@ export class AudioEngine {
   async listInputs(): Promise<MediaDeviceInfo[]> {
     const devices = await navigator.mediaDevices.enumerateDevices()
     return devices.filter((d) => d.kind === 'audioinput')
+  }
+
+  /** Audio stream mirroring the analyzed input (for MediaRecorder capture). */
+  getAudioStream(): MediaStream {
+    return this.recDest?.stream ?? new MediaStream()
   }
 
   /** Play a local audio file and analyze it (also routed to speakers). */

@@ -4,10 +4,11 @@ import { ParamSlider } from './ParamSlider'
 import { audioEngine } from '../audio/engine'
 import { useMidiStore } from '../midi/midi'
 import { handleKey } from '../control/keyboard'
+import { recorder, type RecFormat } from '../recorder'
 
 const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto']
 
-/** Control overlay: audio source, group tabs, param sliders, keyboard shortcuts. */
+/** Control overlay: audio source, recording, group tabs, param sliders, keys. */
 export function Panel() {
   const [visible, setVisible] = useState(true)
   const [tab, setTab] = useState<ParamGroup>('machine')
@@ -15,6 +16,8 @@ export function Panel() {
   const [error, setError] = useState<string | null>(null)
   const [inputs, setInputs] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined)
+  const [recording, setRecording] = useState(false)
+  const [format, setFormat] = useState<RecFormat>('webm')
   const midiSupported = useMidiStore((s) => s.supported)
   const learning = useMidiStore((s) => s.learning)
 
@@ -51,6 +54,27 @@ export function Panel() {
   }
 
   const selectValue = audioEngine.source !== 'mic' ? 'off' : deviceId ?? ''
+
+  const toggleRec = () => {
+    const canvas = document.querySelector('canvas')
+    if (!canvas) return
+    if (recorder.recording) {
+      recorder.stop(setRecording)
+      return
+    }
+    try {
+      setError(null)
+      recorder.start({
+        canvas,
+        audioStream: audioEngine.getAudioStream(),
+        format,
+        fps: 60,
+        onStateChange: setRecording,
+      })
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
 
   useEffect(() => {
     useMidiStore.getState().init().catch((e: Error) => setError(`MIDI: ${e.message}`))
@@ -96,6 +120,22 @@ export function Panel() {
           />
         </label>
         <span className="source">{source}</span>
+      </div>
+      <div className="rec-row">
+        <button className={recording ? 'rec-btn rec-on' : 'rec-btn'} onClick={toggleRec}>
+          {recording ? '● STOP' : '● REC'}
+        </button>
+        <select
+          className="device-select"
+          value={format}
+          onChange={(e) => setFormat(e.target.value as RecFormat)}
+          disabled={recording}
+          title="Recording format"
+        >
+          <option value="webm">WebM</option>
+          <option value="mp4">MP4</option>
+        </select>
+        <span className="rec-hint">{recording ? 'recording 60fps…' : '60fps · canvas res'}</span>
       </div>
       {error && <div className="error">{error}</div>}
       {learning && <div className="learn-hint">Move a MIDI control to assign…</div>}
