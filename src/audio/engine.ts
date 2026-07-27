@@ -68,6 +68,9 @@ export class AudioEngine {
     // edge (which would double the monitor level on each new file).
     this.gainNode?.disconnect()
     if (this.analyser && this.gainNode) this.gainNode.connect(this.analyser)
+    // Re-tap the recording destination so recordings keep getting audio
+    // after the gain graph is rebuilt on each source switch.
+    if (this.recDest && this.gainNode) this.gainNode.connect(this.recDest)
     this.source = 'none'
   }
 

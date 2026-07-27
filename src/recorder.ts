@@ -89,7 +89,11 @@ function loadFF(): Promise<FFmpeg> {
         classWorkerURL: await toBlobURL(`${baseFf}/worker.js`, 'text/javascript'),
       })
       return ff
-    })()
+    })().catch((err) => {
+      // A transient load failure shouldn't poison every later MP4 export.
+      ffPromise = null
+      throw err
+    })
   }
   return ffPromise
 }
