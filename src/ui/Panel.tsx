@@ -56,7 +56,7 @@ export function Panel() {
 
   const selectValue = audioEngine.source !== 'mic' ? 'off' : deviceId ?? ''
 
-  const toggleRec = () => {
+  const toggleRec = async () => {
     const canvas = document.querySelector('canvas')
     if (!canvas) return
     if (recorder.recording) {
@@ -65,7 +65,7 @@ export function Panel() {
     }
     try {
       setError(null)
-      recorder.start({
+      await recorder.start({
         canvas,
         audioStream: audioEngine.getAudioStream(),
         format,
