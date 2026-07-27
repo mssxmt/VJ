@@ -17,6 +17,7 @@ export function Panel() {
   const [inputs, setInputs] = useState<MediaDeviceInfo[]>([])
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined)
   const [recording, setRecording] = useState(false)
+  const [transcoding, setTranscoding] = useState(false)
   const [format, setFormat] = useState<RecFormat>('webm')
   const midiSupported = useMidiStore((s) => s.supported)
   const learning = useMidiStore((s) => s.learning)
@@ -70,6 +71,8 @@ export function Panel() {
         format,
         fps: 60,
         onStateChange: setRecording,
+        onTranscode: setTranscoding,
+        onError: setError,
       })
     } catch (e) {
       setError((e as Error).message)
@@ -135,7 +138,7 @@ export function Panel() {
           <option value="webm">WebM</option>
           <option value="mp4">MP4</option>
         </select>
-        <span className="rec-hint">{recording ? 'recording 60fps…' : '60fps · canvas res'}</span>
+        <span className="rec-hint">{transcoding ? 'transcoding to MP4…' : recording ? 'recording 60fps…' : '60fps · canvas res'}</span>
       </div>
       {error && <div className="error">{error}</div>}
       {learning && <div className="learn-hint">Move a MIDI control to assign…</div>}

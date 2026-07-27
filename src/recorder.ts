@@ -1,7 +1,12 @@
-// Canvas + audio recorder (client-side, real-time) using MediaRecorder.
-// Captures the WebGL canvas (video) and the engine's analyzed audio stream,
-// muxes them, and downloads the result. Format is native MediaRecorder:
-// WebM (VP9/Opus) or MP4 (H.264/AAC) where the browser supports it.
+// Canvas + audio recorder (client-side, real-time).
+//
+// Always records WebM via MediaRecorder (correct duration + audio in Chrome).
+// For MP4, the WebM is transcoded post-stop with ffmpeg.wasm — Chrome's native
+// video/mp4 MediaRecorder produces fragmented MP4 with broken duration and
+// dropped audio, so we don't use it directly.
+
+import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { fetchFile, toBlobURL } from '@ffmpeg/util'
 
 export type RecFormat = 'webm' | 'mp4'
 
@@ -10,49 +15,76 @@ export interface RecStartOptions {
   audioStream: MediaStream
   format: RecFormat
   fps: number
-  /** Bumped when recording starts/stops so the UI can reflect state. */
   onStateChange?: (recording: boolean) => void
+  /** Bumped around the (async) MP4 transcode so the UI can show progress. */
+  onTranscode?: (active: boolean) => void
+  onError?: (message: string) => void
 }
 
-const MIME_CANDIDATES: Record<RecFormat, string[]> = {
-  webm: ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
-  mp4: ['video/mp4;codecs=avc1.640029,mp4a.40.2', 'video/mp4;codecs=h264,aac', 'video/mp4'],
-}
-
-/** Pick the first supported mime type for the requested format. */
-export function pickMime(format: RecFormat): string | null {
-  if (typeof MediaRecorder === 'undefined') return null
-  for (const m of MIME_CANDIDATES[format]) {
-    if (MediaRecorder.isTypeSupported(m)) return m
+// WebM mime (Chrome records this correctly with audio).
+function pickWebmMime(): string {
+  const cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+  for (const m of cands) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) return m
   }
-  return null
+  return 'video/webm'
 }
 
-function extFor(mime: string): string {
-  return mime.includes('mp4') ? 'mp4' : 'webm'
+// Lazy singleton ffmpeg.wasm instance (single-thread core, no COOP/COEP needed).
+let ffPromise: Promise<FFmpeg> | null = null
+function loadFF(): Promise<FFmpeg> {
+  if (!ffPromise) {
+    ffPromise = (async () => {
+      const ff = new FFmpeg()
+      const base = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+      const baseFf = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm'
+      await ff.load({
+        coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+        classWorkerURL: await toBlobURL(`${baseFf}/worker.js`, 'text/javascript'),
+      })
+      return ff
+    })()
+  }
+  return ffPromise
+}
+
+async function transcodeToMp4(webm: Blob): Promise<Blob> {
+  const ff = await loadFF()
+  await ff.writeFile('in.webm', await fetchFile(webm))
+  // yuv420p + faststart -> broadly compatible, web-progressive MP4.
+  // ff.runTranscode is ffmpeg.wasm's command runner (not a shell call).
+  const args = ['-i', 'in.webm', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', 'out.mp4']
+  await ff.exec(args)
+  const data = await ff.readFile('out.mp4')
+  await ff.deleteFile('in.webm')
+  await ff.deleteFile('out.mp4')
+  return new Blob([data as unknown as BlobPart], { type: 'video/mp4' })
 }
 
 export class Recorder {
   private mr: MediaRecorder | null = null
   private chunks: Blob[] = []
-  private mime = ''
+  private format: RecFormat = 'webm'
+  private onTranscode?: (active: boolean) => void
+  private onError?: (message: string) => void
   recording = false
 
   start(opts: RecStartOptions): void {
     if (this.recording) return
-    const mime = pickMime(opts.format)
-    if (!mime) {
-      throw new Error(
-        `${opts.format.toUpperCase()} recording is not supported in this browser. Try WebM.`,
-      )
+    if (typeof MediaRecorder === 'undefined') {
+      throw new Error('Recording is not supported in this browser.')
     }
+    const mime = pickWebmMime()
     const videoStream = opts.canvas.captureStream(opts.fps)
     const stream = new MediaStream([
       ...videoStream.getVideoTracks(),
       ...opts.audioStream.getAudioTracks(),
     ])
+    this.format = opts.format
+    this.onTranscode = opts.onTranscode
+    this.onError = opts.onError
     this.chunks = []
-    this.mime = mime
     this.mr = new MediaRecorder(stream, {
       mimeType: mime,
       videoBitsPerSecond: 16_000_000,
@@ -62,11 +94,19 @@ export class Recorder {
       if (e.data && e.data.size > 0) this.chunks.push(e.data)
     }
     this.mr.onstop = () => {
-      const blob = new Blob(this.chunks, { type: this.mime })
-      this.download(blob)
+      const webm = new Blob(this.chunks, { type: 'video/webm' })
       this.chunks = []
+      if (this.format === 'mp4') {
+        this.onTranscode?.(true)
+        transcodeToMp4(webm)
+          .then((mp4) => this.download(mp4, 'mp4'))
+          .catch((e) => this.onError?.(`MP4 transcode failed: ${e instanceof Error ? e.message : String(e)}`))
+          .finally(() => this.onTranscode?.(false))
+      } else {
+        this.download(webm, 'webm')
+      }
     }
-    this.mr.start(1000) // gather data every 1s
+    this.mr.start(1000)
     this.recording = true
     opts.onStateChange?.(true)
   }
@@ -78,16 +118,15 @@ export class Recorder {
     onStateChange?.(false)
   }
 
-  private download(blob: Blob): void {
+  private download(blob: Blob, ext: 'webm' | 'mp4'): void {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
     a.href = url
-    a.download = `vj-${ts}.${extFor(this.mime)}`
+    a.download = `vj-${ts}.${ext}`
     document.body.appendChild(a)
     a.click()
     a.remove()
-    // Revoke a little later so the download has time to start.
     setTimeout(() => URL.revokeObjectURL(url), 4000)
   }
 }
