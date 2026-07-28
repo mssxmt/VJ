@@ -7,7 +7,12 @@ export function computeRms(timeData: Float32Array): number {
   return Math.sqrt(sum / timeData.length)
 }
 
-/** Average normalized magnitude over a frequency band. */
+/**
+ * Average normalized magnitude over a frequency band. Half-open bin convention
+ * [floor(fromHz/binHz), floor(toHz/binHz)): the upper-boundary bin belongs to
+ * the next band, so adjacent bands (sharing toHz_i == fromHz_{i+1}) never
+ * double-count an FFT bin.
+ */
 export function bandLevel(
   freqData: Float32Array,
   sampleRate: number,
@@ -17,11 +22,11 @@ export function bandLevel(
 ): number {
   const binHz = sampleRate / fftSize
   const from = Math.max(0, Math.floor(fromHz / binHz))
-  const to = Math.min(freqData.length - 1, Math.ceil(toHz / binHz))
-  if (to < from) return 0
+  const to = Math.min(freqData.length, Math.floor(toHz / binHz))
+  if (to <= from) return 0
   let sum = 0
-  for (let i = from; i <= to; i++) sum += freqData[i]
-  return sum / (to - from + 1)
+  for (let i = from; i < to; i++) sum += freqData[i]
+  return sum / (to - from)
 }
 
 export interface FluxResult {

@@ -1,12 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { audioFrame, decayFrame } from './frame'
+import { BAND_COUNT } from './bands'
 
 describe('audioFrame', () => {
-  it('decays band envelopes toward zero and clears onset', () => {
-    audioFrame.low = 1
+  it('decays every band toward zero and clears onset', () => {
+    for (let i = 0; i < BAND_COUNT; i++) audioFrame.bands[i] = 1
     audioFrame.onset = true
     decayFrame(audioFrame, 0.5)
-    expect(audioFrame.low).toBeLessThan(1)
+    for (let i = 0; i < BAND_COUNT; i++) expect(audioFrame.bands[i]).toBeLessThan(1)
     expect(audioFrame.onset).toBe(false)
+  })
+
+  it('has BAND_COUNT band slots', () => {
+    expect(audioFrame.bands.length).toBe(BAND_COUNT)
   })
 })
