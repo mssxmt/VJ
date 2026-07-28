@@ -1,4 +1,5 @@
 import { createRng, pick, range } from '../lib/random'
+import { BAND_COUNT } from '../audio/bands'
 
 export type PartType =
   | 'core'
@@ -23,7 +24,8 @@ export type PartType =
 /** Live switch between the two rendered object patterns. */
 export type Pattern = 'machine' | 'organism'
 
-export type Band = 'low' | 'mid' | 'high'
+/** Frequency-band index into BAND_DEFS (see src/audio/bands.ts). */
+export type Band = number
 
 export interface Reactivity {
   band: Band
@@ -83,8 +85,6 @@ const ORGANISM_CHILD_TYPES: readonly PartType[] = [
   'bulb',
 ]
 
-const BANDS: readonly Band[] = ['low', 'mid', 'high']
-
 export function countParts(root: MachinePart): number {
   return 1 + root.children.reduce((n, c) => n + countParts(c), 0)
 }
@@ -99,7 +99,7 @@ export function generateMachine(config: MachineConfig): MachinePart {
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     reactivity: {
-      band: pick(rng, BANDS),
+      band: Math.floor(rng() * BAND_COUNT),
       punch: range(rng, 0.2, 1),
       spin: range(rng, -1, 1),
       flash: range(rng, 0, 1),
@@ -139,7 +139,6 @@ export function generateMachine(config: MachineConfig): MachinePart {
  * types, geometry, and material set differ. Continuous rotations + tight
  * spread + flowing tubes (stalk/tendril) with small droplet blobs read as one
  * smooth fluid-metal mass, NOT a crystal/geode and not a pile of cysts.
- * organic mass, NOT a crystal/geode.
  */
 export function generateOrganism(config: MachineConfig): MachinePart {
   const rng = createRng(config.seed)
@@ -152,7 +151,7 @@ export function generateOrganism(config: MachineConfig): MachinePart {
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     reactivity: {
-      band: pick(rng, BANDS),
+      band: Math.floor(rng() * BAND_COUNT),
       punch: range(rng, 0.15, 0.7),
       spin: range(rng, -0.5, 0.5),
       flash: range(rng, 0, 1),

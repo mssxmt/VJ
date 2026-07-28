@@ -8,10 +8,11 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { audioFrame } from '../audio/frame'
+import { KICK_BAND } from '../audio/bands'
 import { effectiveValue } from '../control/store'
 
 // Kick = spectral-flux onset where the low band dominates.
-const KICK_LOW_GATE = 0.16
+const KICK_LOW_GATE = 0.11
 const MIN_INTERVAL = 0.07
 
 const RING_COUNT = 6
@@ -72,10 +73,11 @@ export function KickBurst() {
     const wantRings = effectiveValue('effects.kickRings') > 0.5
     const wantParticles = effectiveValue('effects.kickParticles') > 0.5
     const wantFlash = effectiveValue('effects.kickFlash') > 0.5
-    const kick = audioFrame.onset && audioFrame.low > KICK_LOW_GATE && t - lastKick.current > MIN_INTERVAL
+    const low = audioFrame.bands[KICK_BAND]
+    const kick = audioFrame.onset && low > KICK_LOW_GATE && t - lastKick.current > MIN_INTERVAL
     if (kick) {
       lastKick.current = t
-      const strength = 0.55 + Math.min(1, audioFrame.low) * 0.6
+      const strength = 0.55 + Math.min(1, low) * 0.6
 
       if (wantRings) {
         const s = rings[nextRing.current]

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { generateMachine, generateOrganism, countParts, type MachineConfig } from './generate'
+import { BAND_COUNT } from '../audio/bands'
 
 const config: MachineConfig = {
   seed: 42, pattern: 'machine', complexity: 0.6, partCount: 40, symmetry: 2, scaleSpread: 0.5,
@@ -20,9 +21,10 @@ describe('generateMachine', () => {
     expect(countParts(generateMachine(config))).toBe(40)
     expect(countParts(generateMachine({ ...config, partCount: 8 }))).toBe(8)
   })
-  it('every part has valid reactivity band', () => {
+  it('every part has a valid band index', () => {
     const walk = (p: ReturnType<typeof generateMachine>): void => {
-      expect(['low', 'mid', 'high']).toContain(p.reactivity.band)
+      expect(p.reactivity.band).toBeGreaterThanOrEqual(0)
+      expect(p.reactivity.band).toBeLessThan(BAND_COUNT)
       p.children.forEach(walk)
     }
     walk(generateMachine(config))
@@ -40,9 +42,10 @@ describe('generateOrganism', () => {
     expect(countParts(generateOrganism(organismConfig))).toBe(40)
     expect(countParts(generateOrganism({ ...organismConfig, partCount: 8 }))).toBe(8)
   })
-  it('every part has valid reactivity band', () => {
+  it('every part has a valid band index', () => {
     const walk = (p: ReturnType<typeof generateOrganism>): void => {
-      expect(['low', 'mid', 'high']).toContain(p.reactivity.band)
+      expect(p.reactivity.band).toBeGreaterThanOrEqual(0)
+      expect(p.reactivity.band).toBeLessThan(BAND_COUNT)
       p.children.forEach(walk)
     }
     walk(generateOrganism(organismConfig))

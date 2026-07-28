@@ -7,10 +7,11 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { audioFrame } from '../audio/frame'
+import { HIGH_BAND } from '../audio/bands'
 import { effectiveValue } from '../control/store'
 import { machineOrientation } from './orientation'
 
-const HIGH_FLOOR = 0.09 // absolute floor below which highs can't fire
+const HIGH_FLOOR = 0.06 // absolute floor below which highs can't fire
 const HIGH_REL = 1.7 // high must exceed this x its recent average (rising edge)
 const MIN_INTERVAL = 0.06
 const MAX_LEN = 200 // long enough to extend well off-screen
@@ -80,7 +81,7 @@ export function EmpBeam() {
   useFrame((state, delta) => {
     const want = effectiveValue('effects.empBeam') > 0.5
     const t = state.clock.elapsedTime
-    const high = audioFrame.high
+    const high = audioFrame.bands[HIGH_BAND]
 
     // Follow the machine's tumble so the beam is "up/down" relative to the
     // machine, not world-fixed.

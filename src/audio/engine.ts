@@ -1,5 +1,6 @@
 import { computeRms, bandLevel, SpectralFlux } from './features'
 import { audioFrame } from './frame'
+import { BAND_DEFS } from './bands'
 import { effectiveValue } from '../control/store'
 
 export type AudioSource = 'mic' | 'file' | 'none'
@@ -150,12 +151,14 @@ export class AudioEngine {
     const fft = this.analyser.fftSize
     audioFrame.time = time
     audioFrame.rms = computeRms(this.timeData)
-    // Smooth-follow band envelopes (fast attack, slow release)
+    // Smooth-follow band envelopes (fast attack, slow release), per band.
     const follow = (cur: number, target: number) =>
       target > cur ? cur + (target - cur) * 0.6 : cur + (target - cur) * 0.15
-    audioFrame.low = follow(audioFrame.low, bandLevel(mags, sr, fft, 20, 150))
-    audioFrame.mid = follow(audioFrame.mid, bandLevel(mags, sr, fft, 150, 2000))
-    audioFrame.high = follow(audioFrame.high, bandLevel(mags, sr, fft, 2000, 12000))
+    const bands = audioFrame.bands
+    for (let i = 0; i < BAND_DEFS.length; i++) {
+      const def = BAND_DEFS[i]
+      bands[i] = follow(bands[i], bandLevel(mags, sr, fft, def.fromHz, def.toHz))
+    }
 
     const { onset } = this.flux!.update(mags, effectiveValue('audio.onsetSense'))
     audioFrame.onset = onset

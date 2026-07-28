@@ -10,6 +10,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { generateMachine, generateOrganism, type MachinePart, type MachineConfig, type Pattern } from './generate'
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
+import { BAND_COUNT } from '../audio/bands'
 import { useParamStore, effectiveValue } from '../control/store'
 import { machineOrientation } from './orientation'
 
@@ -258,8 +259,9 @@ export function MachineObject() {
 
   // Rolling history of audio features. Each part reads the value from `lag`
   // frames ago, so parts (and symmetry copies) react at staggered times.
+  // Float32Array per entry, allocated once (no per-frame allocation).
   const hist = useRef(
-    Array.from({ length: HIST }, () => ({ onset: 0, low: 0, mid: 0, high: 0 })),
+    Array.from({ length: HIST }, () => ({ onset: 0, bands: new Float32Array(BAND_COUNT) })),
   )
   const writeIdx = useRef(0)
 
@@ -286,9 +288,9 @@ export function MachineObject() {
     const w = writeIdx.current
     const cur = hist.current[w]
     cur.onset = audioFrame.onsetEnv
-    cur.low = audioFrame.low
-    cur.mid = audioFrame.mid
-    cur.high = audioFrame.high
+    const cb = cur.bands
+    const ab = audioFrame.bands
+    for (let i = 0; i < BAND_COUNT; i++) cb[i] = ab[i]
     writeIdx.current = (w + 1) % HIST
 
     let idx = 0
@@ -305,7 +307,7 @@ export function MachineObject() {
 
         // Read this mesh's lagged audio snapshot -> staggered, independent timing.
         const snap = hist.current[(w - sc.lag + HIST) % HIST]
-        const level = r.band === 'low' ? snap.low : r.band === 'mid' ? snap.mid : snap.high
+        const level = snap.bands[r.band]
         const onset = snap.onset
 
         // Independent per-mesh envelope: own band + own sensitivity/decay,

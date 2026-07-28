@@ -13,6 +13,7 @@ import type {
 } from 'postprocessing'
 import { effectiveValue } from '../control/store'
 import { audioFrame } from '../audio/frame'
+import { HIGH_BAND } from '../audio/bands'
 
 export function Effects() {
   const bloom = useRef<BloomEffect>(null)
@@ -24,7 +25,7 @@ export function Effects() {
   useFrame(() => {
     const g = effectiveValue('effects.glitch')
     if (bloom.current) {
-      bloom.current.intensity = effectiveValue('effects.bloom') * (1 + audioFrame.high)
+      bloom.current.intensity = effectiveValue('effects.bloom') * (1 + audioFrame.bands[HIGH_BAND])
     }
     if (chroma.current) {
       const c = effectiveValue('effects.chroma') * (0.002 + audioFrame.onsetEnv * 0.01)
