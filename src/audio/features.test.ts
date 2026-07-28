@@ -19,6 +19,16 @@ describe('bandLevel', () => {
     expect(level).toBeGreaterThan(0)
     expect(bandLevel(freq, 48000, 1024, 5000, 10000)).toBe(0)
   })
+
+  it('uses a half-open bin range so adjacent bands share no bin', () => {
+    // binHz = 48000/1024 = 46.875. Band boundary at BAND_DEFS[0].toHz = 52 Hz
+    // -> boundary bin = floor(52 / 46.875) = 1. With half-open [from, to),
+    // bin 1 belongs to the UPPER band only.
+    const freq = new Float32Array(512).fill(0)
+    freq[1] = 1
+    expect(bandLevel(freq, 48000, 1024, 20, 52)).toBe(0) // lower band: bin 1 excluded
+    expect(bandLevel(freq, 48000, 1024, 52, 136)).toBeGreaterThan(0) // upper band: bin 1 included
+  })
 })
 
 describe('SpectralFlux', () => {
