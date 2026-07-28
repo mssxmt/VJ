@@ -3,11 +3,12 @@
 // destructive reactivity can scatter each part along its OWN random escape
 // direction — a real "disassembly / debris scatter", not a uniform radial
 // enlargement. Core stays anchored as the center parts fly from.
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { generateMachine, generateOrganism, type MachinePart, type MachineConfig, type Pattern } from './generate'
+import { panelTextureForPartId, resetPanelCache } from './panelTexture'
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
 import { BAND_COUNT } from '../audio/bands'
@@ -257,6 +258,12 @@ export function MachineObject() {
   // Per-mesh scatter envelopes. Recreated (zeroed) when the part set changes.
   const env = useMemo(() => new Float32Array(copies.length * flat.length), [copies, flat])
 
+  // Drop per-part panel textures when the part set regenerates so the unique-
+  // per-id texture cache doesn't grow across R/seed/partCount changes.
+  useEffect(() => {
+    resetPanelCache()
+  }, [flat])
+
   // Rolling history of audio features. Each part reads the value from `lag`
   // frames ago, so parts (and symmetry copies) react at staggered times.
   // Float32Array per entry, allocated once (no per-frame allocation).
@@ -360,6 +367,8 @@ export function MachineObject() {
                     matRefs.current[i] = m
                   }}
                   {...materialProps(fp.part.type, config.pattern)}
+                  // Machine parts: engraved panel-line albedo, varied per part.
+                  map={config.pattern === 'machine' ? panelTextureForPartId(fp.part.id) : undefined}
                   emissiveIntensity={0}
                 />
               </mesh>
