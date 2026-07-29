@@ -1,8 +1,10 @@
 // Procedural panel-line albedo textures for machine parts.
 // A seeded generator draws an ASYMMETRIC multi-sub-panel layout (engraved
-// grooves + rivets + diagonal lines) and EACH part id gets its own unique
-// texture (cached). Applied as the material `map` (albedo): grooves darken
-// the metal -> hard-surface / mecha look. Organism parts are not mapped.
+// grooves + rivets + diagonal lines) so EACH part id gets its own unique look.
+// Applied as the material `map` (albedo): grooves darken the metal -> hard-
+// surface / mecha look. MachineObject owns a per-generation Map (useMemo on
+// `flat`) and disposes the previous generation in an effect cleanup — there is
+// no module-level cache, so memory stays bounded to the current part set.
 import * as THREE from 'three'
 import { createRng, range } from '../lib/random'
 
@@ -11,7 +13,7 @@ const GROOVE = '#14161a'
 const HI = '#f4f4f4'
 
 /** Draw one unique asymmetric panel-line texture for the given part id. */
-function createPanelTexture(id: number): THREE.CanvasTexture {
+export function createPanelTexture(id: number): THREE.CanvasTexture {
   const cv = document.createElement('canvas')
   cv.width = TEX_SIZE
   cv.height = TEX_SIZE
@@ -95,24 +97,4 @@ function createPanelTexture(id: number): THREE.CanvasTexture {
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
   return tex
-}
-
-// Per-part-id cache -> every part gets a unique texture; cleared on regeneration
-// (see resetPanelCache) so memory stays bounded to the current part set.
-const cache = new Map<number, THREE.CanvasTexture>()
-
-/** Unique panel-line texture for a given part id (created + cached on first use). */
-export function panelTextureForPartId(id: number): THREE.Texture {
-  let t = cache.get(id)
-  if (!t) {
-    t = createPanelTexture(id)
-    cache.set(id, t)
-  }
-  return t
-}
-
-/** Drop the whole cache (dispose GPU memory); call when the part set regenerates. */
-export function resetPanelCache(): void {
-  for (const t of cache.values()) t.dispose()
-  cache.clear()
 }

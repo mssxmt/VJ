@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { generateMachine, generateOrganism, type MachinePart, type MachineConfig, type Pattern } from './generate'
-import { panelTextureForPartId, resetPanelCache } from './panelTexture'
+import { createPanelTexture } from './panelTexture'
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
 import { BAND_COUNT } from '../audio/bands'
@@ -258,11 +258,28 @@ export function MachineObject() {
   // Per-mesh scatter envelopes. Recreated (zeroed) when the part set changes.
   const env = useMemo(() => new Float32Array(copies.length * flat.length), [copies, flat])
 
-  // Drop per-part panel textures when the part set regenerates so the unique-
-  // per-id texture cache doesn't grow across R/seed/partCount changes.
-  useEffect(() => {
-    resetPanelCache()
+  // One unique engraved panel-line texture per part id. Regenerated WITH `flat`
+  // (so R/seed/partCount/scaleSpread redraw the grooves), not read from a module
+  // cache — part ids are plain 0..N indices, so a stale cache would keep serving
+  // the previous generation's texture after a regenerate.
+  const panelTextures = useMemo(() => {
+    const m = new Map<number, THREE.Texture>()
+    if (config.pattern === 'machine') {
+      for (const fp of flat) {
+        if (!m.has(fp.part.id)) m.set(fp.part.id, createPanelTexture(fp.part.id))
+      }
+    }
+    return m
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror flat's structural deps
   }, [flat])
+
+  // Dispose the PREVIOUS generation once the new Map is committed — never the
+  // textures currently bound to materials (keeps GPU memory bounded).
+  useEffect(() => {
+    return () => {
+      for (const t of panelTextures.values()) t.dispose()
+    }
+  }, [panelTextures])
 
   // Rolling history of audio features. Each part reads the value from `lag`
   // frames ago, so parts (and symmetry copies) react at staggered times.
@@ -367,8 +384,9 @@ export function MachineObject() {
                     matRefs.current[i] = m
                   }}
                   {...materialProps(fp.part.type, config.pattern)}
-                  // Machine parts: engraved panel-line albedo, varied per part.
-                  map={config.pattern === 'machine' ? panelTextureForPartId(fp.part.id) : undefined}
+                  // Machine parts: engraved panel-line albedo, varied per part
+                  // (panelTextures is empty for organism -> map stays undefined).
+                  map={panelTextures.get(fp.part.id)}
                   emissiveIntensity={0}
                 />
               </mesh>
