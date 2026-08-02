@@ -3,7 +3,7 @@ import { PARAMS, type ParamGroup } from '../control/params'
 import { ParamSlider } from './ParamSlider'
 import { audioEngine } from '../audio/engine'
 import { useMidiStore } from '../midi/midi'
-import { handleKey } from '../control/keyboard'
+import { handleKey, handleKeyUp } from '../control/keyboard'
 import { recorder, type RecFormat } from '../recorder'
 
 const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto']
@@ -88,7 +88,9 @@ export function Panel() {
       if (handleKey(e.key)) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onKeyUp = (e: KeyboardEvent) => { if (handleKeyUp(e.key)) e.preventDefault() }
+    window.addEventListener('keyup', onKeyUp)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp) }
   }, [])
 
   if (!visible) return null
