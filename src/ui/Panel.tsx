@@ -6,7 +6,7 @@ import { useMidiStore } from '../midi/midi'
 import { handleKey, handleKeyUp } from '../control/keyboard'
 import { recorder, type RecFormat } from '../recorder'
 
-const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto']
+const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto', 'punch']
 
 /** Control overlay: audio source, recording, group tabs, param sliders, keys. */
 export function Panel() {
@@ -82,13 +82,13 @@ export function Panel() {
   useEffect(() => {
     useMidiStore.getState().init().catch((e: Error) => setError(`MIDI: ${e.message}`))
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return
+      if (e.target instanceof HTMLInputElement && (e.target as HTMLInputElement).type !== 'range') return
       if (e.key === 'h') return setVisible((v) => !v)
       if (e.key === 'f') return void document.documentElement.requestFullscreen().catch(() => {})
       if (handleKey(e.key)) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
-    const onKeyUp = (e: KeyboardEvent) => { if (handleKeyUp(e.key)) e.preventDefault() }
+    const onKeyUp = (e: KeyboardEvent) => { if (e.target instanceof HTMLInputElement && (e.target as HTMLInputElement).type !== 'range') return; if (handleKeyUp(e.key)) e.preventDefault() }
     window.addEventListener('keyup', onKeyUp)
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp) }
   }, [])

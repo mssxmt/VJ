@@ -40,9 +40,9 @@ export const PARAMS: readonly ParamDef[] = [
   { id: 'effects.stretchH', label: 'Stretch H', group: 'effects', min: 0, max: 1, default: 0 },
   // punch-in (hold zoom + fisheye)
   { id: 'punch.trigger', label: 'Punch', group: 'punch', min: 0, max: 1, default: 0 },
-  { id: 'punch.strength', label: 'Punch Strength', group: 'punch', min: 0, max: 1, default: 0.8 },
-  { id: 'punch.warp', label: 'Fisheye Warp', group: 'punch', min: 0, max: 1, default: 0.6 },
-  { id: 'punch.attack', label: 'Punch Attack', group: 'punch', min: 0, max: 1, default: 0.3 },
+  { id: 'punch.strength', label: 'Punch Strength', group: 'punch', min: 0, max: 1, default: 1.0 },
+  { id: 'punch.warp', label: 'Fisheye Warp', group: 'punch', min: 0, max: 1, default: 0.9 },
+  { id: 'punch.attack', label: 'Punch Attack', group: 'punch', min: 0, max: 1, default: 0.08 },
   { id: 'punch.release', label: 'Punch Release', group: 'punch', min: 0, max: 1, default: 0.5 },
   // camera
   { id: 'camera.distance', label: 'Distance', group: 'camera', min: 2, max: 30, default: 8 },
