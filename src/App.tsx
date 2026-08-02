@@ -2,6 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { MachineObject } from './machine/MachineObject'
 import { KickBurst } from './machine/KickBurst'
 import { EmpBeam } from './machine/EmpBeam'
+import { Punch } from './effects/Punch'
 import { Effects } from './effects/Effects'
 import { CameraRig } from './camera/CameraRig'
 import { AutoPilot } from './control/auto'
@@ -26,6 +27,7 @@ export default function App() {
         <MachineObject />
         <KickBurst />
         <EmpBeam />
+        <Punch />
         <CameraRig />
         <AutoPilot />
         <Effects />
