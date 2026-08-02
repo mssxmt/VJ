@@ -20,10 +20,12 @@ export function CameraRig() {
 
   useFrame((state) => {
     const auto = effectiveValue('auto.master') > 0.5 && effectiveValue('auto.camera') > 0.5
-    const dist = effectiveValue('camera.distance')
+    // Punch-in: push in (shorter distance) + widen fov while held.
+    const p = audioFrame.punch * effectiveValue('punch.strength')
+    const dist = effectiveValue('camera.distance') * (1 - p * 0.6)
     const t = state.clock.elapsedTime
 
-    camera.fov = effectiveValue('camera.fov')
+    camera.fov = effectiveValue('camera.fov') + p * 40
     camera.updateProjectionMatrix()
     controls.current.autoRotate = true
     controls.current.autoRotateSpeed = effectiveValue('camera.orbitSpeed') * 10
