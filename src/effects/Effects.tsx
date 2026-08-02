@@ -14,6 +14,7 @@ import type {
 import { effectiveValue } from '../control/store'
 import { audioFrame } from '../audio/frame'
 import { HIGH_BAND } from '../audio/bands'
+import { FisheyeEffect } from './FisheyeEffect'
 
 export function Effects() {
   const bloom = useRef<BloomEffect>(null)
@@ -21,6 +22,9 @@ export function Effects() {
   const glitch = useRef<GlitchEffect>(null)
   const noise = useRef<NoiseEffect>(null)
   const scan = useRef<ScanlineEffect>(null)
+  // Loosely typed: wrapEffect hides the impl class, but the uniforms Map is
+  // the stable surface we drive per-frame.
+  const fisheye = useRef<{ uniforms: Map<string, { value: number }> }>(null)
 
   useFrame(() => {
     const g = effectiveValue('effects.glitch')
@@ -38,11 +42,18 @@ export function Effects() {
     }
     if (noise.current) noise.current.blendMode.opacity.value = effectiveValue('effects.noise')
     if (scan.current) scan.current.blendMode.opacity.value = effectiveValue('effects.scanline')
+    // Barrel distortion rides the punch envelope; barrelUv is identity at 0,
+    // so a quiet frame costs only the texture sample.
+    if (fisheye.current) {
+      fisheye.current.uniforms.get('intensity')!.value =
+        audioFrame.punch * effectiveValue('punch.warp')
+    }
   })
 
   return (
     <EffectComposer>
       <Bloom ref={bloom} luminanceThreshold={0.4} mipmapBlur intensity={1} />
+      <FisheyeEffect ref={fisheye as never} />
       <ChromaticAberration ref={chroma} />
       <Glitch ref={glitch} mode={GlitchMode.DISABLED} />
       <Scanline ref={scan} density={1.5} />
