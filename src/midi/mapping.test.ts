@@ -19,8 +19,16 @@ describe('parseMidiMessage', () => {
       value01: 1,
     })
   })
-  it('treats note-on velocity 0 as note-off (null)', () => {
-    expect(parseMidiMessage(new Uint8Array([0x90, 60, 0]))).toBeNull()
+  it('treats note-on velocity 0 as note off (value 0)', () => {
+    expect(parseMidiMessage(new Uint8Array([0x90, 60, 0]))).toEqual({
+      type: 'note', channel: 0, note: 60, value01: 0,
+    })
+  })
+
+  it('parses explicit note-off status', () => {
+    expect(parseMidiMessage(new Uint8Array([0x81, 72, 0]))).toEqual({
+      type: 'note', channel: 1, note: 72, value01: 0,
+    })
   })
   it('ignores unrelated messages', () => {
     expect(parseMidiMessage(new Uint8Array([0xf8]))).toBeNull() // clock
