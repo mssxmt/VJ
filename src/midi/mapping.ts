@@ -12,7 +12,11 @@ export function parseMidiMessage(data: Uint8Array): MidiMsg | null {
   const status = data[0] & 0xf0
   const channel = data[0] & 0x0f
   if (status === 0xb0) return { type: 'cc', channel, controller: data[1], value01: data[2] / 127 }
-  if (status === 0x90 && data[2] > 0) {
+  // Note Off: explicit 0x80, or 0x90 with velocity 0 (running status convention)
+  if (status === 0x80 || (status === 0x90 && data[2] === 0)) {
+    return { type: 'note', channel, note: data[1], value01: 0 }
+  }
+  if (status === 0x90) {
     return { type: 'note', channel, note: data[1], value01: data[2] / 127 }
   }
   return null

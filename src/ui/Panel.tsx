@@ -3,10 +3,10 @@ import { PARAMS, type ParamGroup } from '../control/params'
 import { ParamSlider } from './ParamSlider'
 import { audioEngine } from '../audio/engine'
 import { useMidiStore } from '../midi/midi'
-import { handleKey } from '../control/keyboard'
+import { handleKey, handleKeyUp } from '../control/keyboard'
 import { recorder, type RecFormat } from '../recorder'
 
-const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto']
+const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto', 'punch']
 
 /** Control overlay: audio source, recording, group tabs, param sliders, keys. */
 export function Panel() {
@@ -82,13 +82,15 @@ export function Panel() {
   useEffect(() => {
     useMidiStore.getState().init().catch((e: Error) => setError(`MIDI: ${e.message}`))
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return
+      if (e.target instanceof HTMLInputElement && (e.target as HTMLInputElement).type !== 'range') return
       if (e.key === 'h') return setVisible((v) => !v)
       if (e.key === 'f') return void document.documentElement.requestFullscreen().catch(() => {})
       if (handleKey(e.key)) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onKeyUp = (e: KeyboardEvent) => { if (e.target instanceof HTMLInputElement && (e.target as HTMLInputElement).type !== 'range') return; if (handleKeyUp(e.key)) e.preventDefault() }
+    window.addEventListener('keyup', onKeyUp)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp) }
   }, [])
 
   if (!visible) return null
@@ -155,7 +157,7 @@ export function Panel() {
         ))}
       </div>
       {!midiSupported && <div className="hint">Web MIDI not supported in this browser</div>}
-      <div className="hint">H: hide UI / F: fullscreen / Space: AUTO / R: regenerate / G,B,E: effects / P: pattern / 1-9: seeds</div>
+      <div className="hint">H: hide UI / F: fullscreen / Space: AUTO / R: regenerate / G,B,E: effects / P: pattern / O: punch (hold) / 1-9: seeds</div>
     </div>
   )
 }

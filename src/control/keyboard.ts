@@ -36,6 +36,10 @@ export function handleKey(key: string): boolean {
     case 'p':
       toggleParam('machine.pattern')
       return true
+    case 'o':
+      // Punch-in hold: press starts push+fisheye
+      s.setParam('punch.trigger', 1)
+      return true
     case '1':
     case '2':
     case '3':
@@ -51,4 +55,14 @@ export function handleKey(key: string): boolean {
     default:
       return false
   }
+}
+
+
+/** Handle a key release (hold-style controls). Returns true if consumed. */
+export function handleKeyUp(key: string): boolean {
+  if (key === 'o') {
+    useParamStore.getState().setParam('punch.trigger', 0)
+    return true
+  }
+  return false
 }

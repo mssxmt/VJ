@@ -1,4 +1,4 @@
-export type ParamGroup = 'machine' | 'effects' | 'camera' | 'audio' | 'auto'
+export type ParamGroup = 'machine' | 'effects' | 'camera' | 'audio' | 'auto' | 'punch'
 
 export interface ParamDef {
   id: string
@@ -38,6 +38,12 @@ export const PARAMS: readonly ParamDef[] = [
   // whole-object stretch glitch (violent vertical / horizontal elongation)
   { id: 'effects.stretchV', label: 'Stretch V', group: 'effects', min: 0, max: 1, default: 0 },
   { id: 'effects.stretchH', label: 'Stretch H', group: 'effects', min: 0, max: 1, default: 0 },
+  // punch-in (hold zoom + fisheye)
+  { id: 'punch.trigger', label: 'Punch', group: 'punch', min: 0, max: 1, default: 0 },
+  { id: 'punch.strength', label: 'Punch Strength', group: 'punch', min: 0, max: 1, default: 1.0 },
+  { id: 'punch.warp', label: 'Fisheye Warp', group: 'punch', min: 0, max: 1, default: 0.9 },
+  { id: 'punch.attack', label: 'Punch Attack', group: 'punch', min: 0, max: 1, default: 0.08 },
+  { id: 'punch.release', label: 'Punch Release', group: 'punch', min: 0, max: 1, default: 0.5 },
   // camera
   { id: 'camera.distance', label: 'Distance', group: 'camera', min: 2, max: 30, default: 8 },
   { id: 'camera.orbitSpeed', label: 'Orbit Speed', group: 'camera', min: -2, max: 2, default: 0.1 },
