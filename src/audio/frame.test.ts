@@ -14,4 +14,10 @@ describe('audioFrame', () => {
   it('has BAND_COUNT band slots', () => {
     expect(audioFrame.bands.length).toBe(BAND_COUNT)
   })
+
+  it('exposes punch starting at 0 and decayFrame leaves it untouched', () => {
+    const f = { ...audioFrame, punch: 0.7 }
+    decayFrame(f, 0.5)
+    expect(f.punch).toBe(0.7) // punch is user-driven, not audio-decayed
+  })
 })

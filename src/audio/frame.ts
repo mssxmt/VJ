@@ -10,6 +10,8 @@ export interface AudioFrame {
   onset: boolean
   /** Envelope that spikes to 1 on onset then decays; drives punch animations. */
   onsetEnv: number
+  /** User-driven punch-in envelope (0-1); advanced each frame by <Punch>. */
+  punch: number
   time: number
 }
 
@@ -18,6 +20,7 @@ export const audioFrame: AudioFrame = {
   bands: new Array<number>(BAND_COUNT).fill(0),
   onset: false,
   onsetEnv: 0,
+  punch: 0,
   time: 0,
 }
 
