@@ -1,0 +1,42 @@
+name: Supply Chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 15:00 JST daily — catch newly-published advisories / IoCs.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Dependency audit & IoC scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # Scan the lockfile BEFORE install — if a malicious payload shipped
+      # a preinstall script, we must catch it before npm executes it.
+      - name: IoC scan (lockfile)
+        run: node .github/scripts/supply-chain-scan.mjs
+
+      # Install with lifecycle scripts disabled (belt + suspenders with .npmrc).
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Audit (known advisories)
+        run: npm audit --audit-level=high
