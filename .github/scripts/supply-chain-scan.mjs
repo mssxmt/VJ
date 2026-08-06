@@ -50,9 +50,10 @@ const hits = [];
 for (const [depPath, meta] of Object.entries(packages)) {
   if (depPath === '') continue; // project root, not a dependency
 
-  const name = depPath.startsWith('node_modules/')
-    ? depPath.slice('node_modules/'.length)
-    : depPath;
+  // Extract the name from the final node_modules/ segment so nested deps
+  // (node_modules/parent/node_modules/keyv) resolve to "keyv", not
+  // "parent/node_modules/keyv" — otherwise nested malicious copies slip past.
+  const name = depPath.split('node_modules/').pop();
 
   const bad = MALICIOUS_VERSIONS[name];
   if (bad?.includes(meta.version)) {
