@@ -6,7 +6,7 @@ import { useMidiStore } from '../midi/midi'
 import { handleKey, handleKeyUp } from '../control/keyboard'
 import { recorder, type RecFormat } from '../recorder'
 
-const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto', 'punch']
+const GROUPS: ParamGroup[] = ['machine', 'effects', 'camera', 'audio', 'auto', 'punch', 'hud']
 
 /** Control overlay: audio source, recording, group tabs, param sliders, keys. */
 export function Panel() {
@@ -157,7 +157,7 @@ export function Panel() {
         ))}
       </div>
       {!midiSupported && <div className="hint">Web MIDI not supported in this browser</div>}
-      <div className="hint">H: hide UI / F: fullscreen / Space: AUTO / R: regenerate / G,B,E: effects / P: pattern / O: punch (hold) / 1-9: seeds</div>
+      <div className="hint">H: hide UI / F: fullscreen / Space: AUTO / R: regenerate / G,B,E: effects / P: pattern / T: HUD / O: punch (hold) / 1-9: seeds</div>
     </div>
   )
 }

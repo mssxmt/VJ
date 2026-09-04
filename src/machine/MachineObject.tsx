@@ -14,6 +14,8 @@ import { audioFrame } from '../audio/frame'
 import { BAND_COUNT } from '../audio/bands'
 import { useParamStore, effectiveValue } from '../control/store'
 import { machineOrientation } from './orientation'
+import { hudTracking } from '../hud/tracking'
+import { MAX_TRACKED } from '../control/params'
 
 // --- Part geometries -------------------------------------------------------
 // bolt: revolved rivet profile (head + shaft).
@@ -117,6 +119,9 @@ const SMOOTH_TYPES = new Set([
 ])
 const ACCENT_TYPES = new Set(['pipe', 'ring', 'greeble', 'antenna', 'spike', 'bolt', 'cable'])
 const ORGANISM_ACCENT_TYPES = new Set(['stalk', 'tendril'])
+// HUD tracking prefers distinctive silhouettes so the brackets frame something
+// recognizable rather than a filler greeble.
+const TRACK_PREFERRED = new Set(['antenna', 'ring', 'spike', 'nucleus', 'bulb'])
 
 function materialProps(type: string, pattern: Pattern) {
   if (pattern === 'organism') {
@@ -280,6 +285,32 @@ export function MachineObject() {
       for (const t of panelTextures.values()) t.dispose()
     }
   }, [panelTextures])
+
+  // Publish HUD tracking candidates: up to MAX_TRACKED copy-0 meshes (copy 0's
+  // flat index equals its mesh index), chosen deterministically per structure.
+  // Off-center parts are favored so brackets spread instead of piling on the
+  // anchored core. Runs after render, so the inline ref callbacks are fresh.
+  useEffect(() => {
+    const rng = createRng((Math.floor(config.seed) * 2246822519 + flat.length) >>> 0)
+    const scored = flat.map((fp, i) => ({
+      i,
+      score:
+        (TRACK_PREFERRED.has(fp.part.type) ? 2 : 0) +
+        (fp.pos.length() > 0.6 ? 1 : 0) +
+        rng(),
+    }))
+    scored.sort((a, b) => b.score - a.score)
+    hudTracking.parts = scored.slice(0, MAX_TRACKED).flatMap(({ i }) => {
+      const mesh = meshRefs.current[i]
+      const fp = flat[i]
+      return mesh ? [{ mesh, partId: fp.part.id, band: fp.part.reactivity.band }] : []
+    })
+    hudTracking.generation++
+    return () => {
+      hudTracking.parts = []
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror flat's structural deps
+  }, [flat])
 
   // Rolling history of audio features. Each part reads the value from `lag`
   // frames ago, so parts (and symmetry copies) react at staggered times.
