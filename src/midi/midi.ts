@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { parseMidiMessage, mappingKey, serializeMappings, deserializeMappings } from './mapping'
 import { useParamStore } from '../control/store'
-import { getParam, clamp01ToRange } from '../control/params'
+import { findParam, clamp01ToRange } from '../control/params'
 
 const STORAGE_KEY = 'vj.midi.mappings'
 
@@ -49,7 +49,10 @@ export const useMidiStore = create<MidiState>((set, get) => ({
           }
           const paramId = mappings.get(key)
           if (!paramId) return
-          const def = getParam(paramId)
+          // Mappings persist in localStorage across app versions; a mapping to
+          // a since-removed param must be ignored, not crash the MIDI callback.
+          const def = findParam(paramId)
+          if (!def) return
           // Toggles flip on press (any nonzero value); ranges track the control.
           const value = def.toggle
             ? msg.value01 > 0

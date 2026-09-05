@@ -1,19 +1,29 @@
-// Brushed-up v1 machine renderer. Keeps v1's generateMachine (dramatic,
-// seed-driven tree) but flattens the tree into world-space parts so the
-// destructive reactivity can scatter each part along its OWN random escape
-// direction — a real "disassembly / debris scatter", not a uniform radial
-// enlargement. Core stays anchored as the center parts fly from.
+// Machine renderer: v1's dramatic seed-driven tree (alien silhouettes — a
+// stricter assembly grammar was tried and reverted, see generate.ts), rendered
+// as Gantz-Graf dark chrome with edge wires, and convulsed on onsets by
+// snapping parts between precomputed quantized pose mutations. Flattens the
+// tree to world space so scatter throws each part along its OWN escape vector.
+// Core stays anchored as the center parts fly from.
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { generateMachine, generateOrganism, type MachinePart, type MachineConfig, type Pattern } from './generate'
+import {
+  generateMachine,
+  generateOrganism,
+  type MachineConfig,
+  type Pattern,
+} from './generate'
+import { createConvulsionClock, shouldConvulse, convulsePoses } from './convulsion'
+import { flatten, type FlatPart } from './flatten'
 import { createPanelTexture } from './panelTexture'
 import { createRng, range } from '../lib/random'
 import { audioFrame } from '../audio/frame'
-import { BAND_COUNT } from '../audio/bands'
+import { BAND_COUNT, HIGH_BAND } from '../audio/bands'
 import { useParamStore, effectiveValue } from '../control/store'
 import { machineOrientation } from './orientation'
+import { hudTracking } from '../hud/tracking'
+import { MAX_TRACKED } from '../control/params'
 
 // --- Part geometries -------------------------------------------------------
 // bolt: revolved rivet profile (head + shaft).
@@ -101,10 +111,14 @@ const GEOMETRIES: Record<string, THREE.BufferGeometry> = {
   tendril: TENDRIL_GEO,
 }
 
-const COL_MAIN = new THREE.Color('#b8bcc4')
-const COL_ACCENT = new THREE.Color('#5a5e66')
+// Gantz-Graf dark chrome: the color mostly tints the environment reflection
+// (metalness 1), so "near-black" lives in these dark tints plus the darkened
+// panel albedo — pure #000 would kill the speculars that make chrome read.
+const COL_MAIN = new THREE.Color('#464b52')
+const COL_ACCENT = new THREE.Color('#33373d')
+// Cool-only emissive (the design language bans warm accents — the old #fff0c0
+// accent emissive predates that rule).
 const EMIT_MAIN = new THREE.Color('#cfe8ff')
-const EMIT_ACCENT = new THREE.Color('#fff0c0')
 // Organism: fluid metal / liquid mercury — polished chrome, fully smooth.
 const COL_ORGANISM_MAIN = new THREE.Color('#cdd4dc')
 const COL_ORGANISM_ACCENT = new THREE.Color('#80868d')
@@ -115,8 +129,12 @@ const SMOOTH_TYPES = new Set([
   'ring', 'cable', 'bolt',
   'nucleus', 'blob', 'bulb', 'stalk', 'tendril',
 ])
+// Old accent family (pipes/rings/thorns/etc) maps onto the darker chrome tint.
 const ACCENT_TYPES = new Set(['pipe', 'ring', 'greeble', 'antenna', 'spike', 'bolt', 'cable'])
 const ORGANISM_ACCENT_TYPES = new Set(['stalk', 'tendril'])
+// HUD tracking prefers distinctive silhouettes so the brackets frame something
+// recognizable rather than a filler greeble.
+const TRACK_PREFERRED = new Set(['antenna', 'ring', 'spike', 'nucleus', 'bulb'])
 
 function materialProps(type: string, pattern: Pattern) {
   if (pattern === 'organism') {
@@ -131,27 +149,61 @@ function materialProps(type: string, pattern: Pattern) {
       flatShading: false,
       transparent: false,
       opacity: 1,
+      envMapIntensity: 0.7,
     }
   }
   const accent = ACCENT_TYPES.has(type)
   return {
     color: accent ? COL_ACCENT : COL_MAIN,
-    metalness: 0.9,
-    roughness: accent ? 0.45 : 0.26,
-    emissive: accent ? EMIT_ACCENT : EMIT_MAIN,
+    metalness: 1.0,
+    roughness: accent ? 0.32 : 0.2,
+    emissive: EMIT_MAIN,
     flatShading: !SMOOTH_TYPES.has(type),
     transparent: false,
     opacity: 1,
+    envMapIntensity: 1.0,
   }
 }
 
-interface FlatPart {
-  part: MachinePart
-  pos: THREE.Vector3
-  quat: THREE.Quaternion
-  scale: THREE.Vector3
+/** Only wire-carrying meshes need their faces pushed back (z-fight with the
+ *  edge overlay); offsetting every machine material would be a silent global
+ *  depth bias for no benefit. */
+const WIRE_HOST_PROPS = {
+  polygonOffset: true,
+  polygonOffsetFactor: 1,
+  polygonOffsetUnits: 1,
+} as const
+
+// Shared wire overlay material: one instance drives every edge overlay, so
+// per-frame opacity rides a single material update. No toneMapped flag: AGX
+// runs as a postprocessing effect, so the material-level flag is a no-op here.
+const WIRE_MAT = new THREE.LineBasicMaterial({
+  color: '#9fc2d8',
+  transparent: true,
+  opacity: 0.35,
+  depthWrite: false,
+})
+// Lazy per-type edge geometries. Only faceted types get overlays: EdgesGeometry
+// at a 30° threshold yields nothing legible on smooth tubes/rings/lathes.
+const EDGE_GEOS = new Map<string, THREE.EdgesGeometry>()
+function edgesFor(type: string): THREE.EdgesGeometry {
+  let g = EDGE_GEOS.get(type)
+  if (!g) {
+    g = new THREE.EdgesGeometry(GEOMETRIES[type], 30)
+    EDGE_GEOS.set(type, g)
+  }
+  return g
 }
 
+/** Types whose edge overlay reads as structure (flat-shaded, hard corners). */
+const WIRE_TYPES = new Set(['core', 'box', 'fin', 'vent', 'strut'])
+/** How many of the largest faceted parts carry wires. */
+const WIRE_COUNT = 8
+
+
+/** Build a unique scatter profile per (copy, part) so every mesh — including
+ *  across symmetry copies — moves independently. Root (core / nucleus) stays
+ *  anchored as the center parts fly from. */
 /** Per-(copy, part) scatter params — unique across the whole machine. */
 interface Scatter {
   escape: THREE.Vector3
@@ -165,34 +217,6 @@ interface Scatter {
 /** History length for the per-part lagged audio reads (~0.47s at 60fps). */
 const HIST = 28
 
-const _euler = new THREE.Euler()
-
-/** Walk the tree accumulating transforms -> flat world-space parts (structural only). */
-function flatten(root: MachinePart): FlatPart[] {
-  const out: FlatPart[] = []
-  const walk = (part: MachinePart, parentWorld: THREE.Matrix4) => {
-    const local = new THREE.Matrix4().compose(
-      new THREE.Vector3(part.position[0], part.position[1], part.position[2]),
-      new THREE.Quaternion().setFromEuler(
-        _euler.set(part.rotation[0], part.rotation[1], part.rotation[2]),
-      ),
-      new THREE.Vector3(part.scale[0], part.scale[1], part.scale[2]),
-    )
-    const world = parentWorld.clone().multiply(local)
-    const pos = new THREE.Vector3()
-    const quat = new THREE.Quaternion()
-    const scale = new THREE.Vector3()
-    world.decompose(pos, quat, scale)
-    out.push({ part, pos, quat, scale })
-    for (const c of part.children) walk(c, world)
-  }
-  walk(root, new THREE.Matrix4())
-  return out
-}
-
-/** Build a unique scatter profile per (copy, part) so every mesh — including
- *  across symmetry copies — moves independently. Root (core / nucleus) stays
- *  anchored as the center parts fly from. */
 function buildScatter(copies: number, flat: FlatPart[]): Scatter[] {
   const arr: Scatter[] = []
   for (let c = 0; c < copies; c++) {
@@ -258,6 +282,49 @@ export function MachineObject() {
   // Per-mesh scatter envelopes. Recreated (zeroed) when the part set changes.
   const env = useMemo(() => new Float32Array(copies.length * flat.length), [copies, flat])
 
+  // Convulsion state: per-(copy, part) active pose index, zeroed on regenerate.
+  const poseCounts = useMemo(() => {
+    const a = new Uint8Array(flat.length)
+    for (let i = 0; i < flat.length; i++) a[i] = flat[i].poses.length
+    return a
+  }, [flat])
+  const poseIdx = useMemo(() => new Uint8Array(copies.length * flat.length), [copies, flat])
+  // Halve switch probability for parts with children: their subtree stays put
+  // when they jump, and orphaning it every other beat read as noise.
+  const poseDamp = useMemo(() => {
+    const a = new Uint8Array(flat.length)
+    for (let i = 0; i < flat.length; i++) a[i] = flat[i].part.children.length > 0 ? 1 : 0
+    return a
+  }, [flat])
+  // Copy-0 pose snapshot so tracked parts can be stamped only when THEY moved.
+  const prevPose = useMemo(() => new Uint8Array(flat.length), [flat])
+  const convClock = useRef(createConvulsionClock())
+  useEffect(() => {
+    convClock.current = createConvulsionClock()
+  }, [flat])
+
+  // Wire overlays go on the N largest faceted parts (by world volume) — the
+  // masses whose edges define the silhouette — not on tubes/thorns where an
+  // edge overlay is noise. Deterministic: volume sort with index tiebreak.
+  const wireSet = useMemo(() => {
+    const picked = new Set<number>()
+    if (config.pattern === 'machine') {
+      flat
+        .map((fp, i) => ({
+          i,
+          v: WIRE_TYPES.has(fp.part.type)
+            ? Math.abs(fp.scale.x * fp.scale.y * fp.scale.z)
+            : -1,
+        }))
+        .filter((e) => e.v > 0)
+        .sort((a, b) => b.v - a.v || a.i - b.i)
+        .slice(0, WIRE_COUNT)
+        .forEach((e) => picked.add(e.i))
+    }
+    return picked
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror flat's structural deps
+  }, [flat])
+
   // One unique engraved panel-line texture per part id. Regenerated WITH `flat`
   // (so R/seed/partCount/scaleSpread redraw the grooves), not read from a module
   // cache — part ids are plain 0..N indices, so a stale cache would keep serving
@@ -281,6 +348,34 @@ export function MachineObject() {
     }
   }, [panelTextures])
 
+  // Publish HUD tracking candidates: up to MAX_TRACKED copy-0 meshes (copy 0's
+  // flat index equals its mesh index), chosen deterministically per structure.
+  // Off-center parts are favored so brackets spread instead of piling on the
+  // anchored core. Runs after render, so the inline ref callbacks are fresh.
+  useEffect(() => {
+    const rng = createRng((Math.floor(config.seed) * 2246822519 + flat.length) >>> 0)
+    const scored = flat.map((fp, i) => ({
+      i,
+      score:
+        (TRACK_PREFERRED.has(fp.part.type) ? 2 : 0) +
+        (fp.pos.length() > 0.6 ? 1 : 0) +
+        rng(),
+    }))
+    scored.sort((a, b) => b.score - a.score)
+    hudTracking.parts = scored.slice(0, MAX_TRACKED).flatMap(({ i }) => {
+      const mesh = meshRefs.current[i]
+      const fp = flat[i]
+      return mesh
+        ? [{ mesh, partId: fp.part.id, band: fp.part.reactivity.band, flatIndex: i, poseStamp: 0 }]
+        : []
+    })
+    hudTracking.generation++
+    return () => {
+      hudTracking.parts = []
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror flat's structural deps
+  }, [flat])
+
   // Rolling history of audio features. Each part reads the value from `lag`
   // frames ago, so parts (and symmetry copies) react at staggered times.
   // Float32Array per entry, allocated once (no per-frame allocation).
@@ -289,8 +384,36 @@ export function MachineObject() {
   )
   const writeIdx = useRef(0)
 
-  useFrame((_state, delta) => {
+  useFrame((state, delta) => {
     const reactivity = effectiveValue('machine.reactivity')
+
+    if (config.pattern === 'machine') {
+      // Convulsion: quantized instantaneous reconfiguration on onsets — the
+      // Gantz-Graf motion signature. Scatter keeps easing on top of whichever
+      // pose is active.
+      const convulse = effectiveValue('machine.convulse')
+      if (
+        convulse > 0 &&
+        shouldConvulse(convClock.current, state.clock.elapsedTime, audioFrame.onset)
+      ) {
+        for (let p = 0; p < flat.length; p++) prevPose[p] = poseIdx[p]
+        const eventSeed = (Math.floor(config.seed) * 31 + convClock.current.count) >>> 0
+        convulsePoses(poseIdx, poseCounts, copies.length, convulse * 0.5, eventSeed, poseDamp)
+        // Stamp only the tracked parts whose copy-0 mesh actually switched —
+        // HudLayer re-acquires those brackets and leaves the rest locked.
+        for (const tp of hudTracking.parts) {
+          if (poseIdx[tp.flatIndex] !== prevPose[tp.flatIndex]) {
+            tp.poseStamp = convClock.current.count
+          }
+        }
+      }
+      // Wire overlay: one shared material, band-lit so the edges pulse with
+      // the highs and spike on onsets.
+      const wires = effectiveValue('machine.wires')
+      WIRE_MAT.opacity =
+        wires * (0.22 + Math.min(0.78, audioFrame.bands[HIGH_BAND] * 0.9 + audioFrame.onsetEnv * 0.35))
+      WIRE_MAT.visible = wires > 0.01
+    }
 
     if (rootRef.current) {
       const d = Math.min(delta, 0.05) // clamp to avoid jumps on tab refocus
@@ -349,11 +472,14 @@ export function MachineObject() {
         const en = e < 1 ? e : 1
         const eased = 1 - Math.pow(1 - en, 3)
         const off = eased * 1.1 * reactivity * sc.speed
-        m.position.copy(fp.pos).addScaledVector(sc.escape, off)
-        m.quaternion.copy(fp.quat)
+        // Scatter offsets apply from whichever precomputed pose the convulsion
+        // state has active (index 0 until the first event).
+        const pp = fp.poses[poseIdx[ei]] ?? fp.poses[0]
+        m.position.copy(pp.pos).addScaledVector(sc.escape, off)
+        m.quaternion.copy(pp.quat)
 
         const punch = 1 + e * r.punch * 0.18 * reactivity
-        m.scale.set(fp.scale.x * punch, fp.scale.y * punch, fp.scale.z * punch)
+        m.scale.set(pp.scale.x * punch, pp.scale.y * punch, pp.scale.z * punch)
         if (mat) {
           mat.emissiveIntensity = e * r.flash * 0.5 * reactivity
         }
@@ -366,7 +492,7 @@ export function MachineObject() {
     <group ref={rootRef}>
       {copies.map((c) => (
         <group key={c.key} position={c.position} rotation={c.rotation}>
-          {flat.map((fp) => {
+          {flat.map((fp, fi) => {
             const i = idx++
             return (
               <mesh
@@ -384,11 +510,18 @@ export function MachineObject() {
                     matRefs.current[i] = m
                   }}
                   {...materialProps(fp.part.type, config.pattern)}
+                  {...(wireSet.has(fi) ? WIRE_HOST_PROPS : {})}
                   // Machine parts: engraved panel-line albedo, varied per part
                   // (panelTextures is empty for organism -> map stays undefined).
                   map={panelTextures.get(fp.part.id)}
                   emissiveIntensity={0}
                 />
+                {/* Edge wires on the largest masses only — a child inherits the
+                    mesh transform, so the overlay follows scatter/convulsions
+                    with zero extra per-frame work. */}
+                {wireSet.has(fi) && (
+                  <lineSegments geometry={edgesFor(fp.part.type)} material={WIRE_MAT} />
+                )}
               </mesh>
             )
           })}
