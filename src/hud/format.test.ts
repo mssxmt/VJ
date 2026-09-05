@@ -6,6 +6,8 @@ import {
   formatDistance,
   formatTimecode,
   formatRms,
+  formatAzEl,
+  formatClock,
   bandBarLevels,
   typeSlice,
 } from './format'
@@ -36,12 +38,12 @@ describe('formatPartLabel', () => {
 })
 
 describe('formatDistance', () => {
-  it('renders one decimal with D prefix', () => {
-    expect(formatDistance(2.41)).toBe('D2.4')
-    expect(formatDistance(11)).toBe('D11.0')
+  it('renders two decimals with D prefix', () => {
+    expect(formatDistance(2.416)).toBe('D2.42')
+    expect(formatDistance(11)).toBe('D11.00')
   })
   it('never goes negative', () => {
-    expect(formatDistance(-3)).toBe('D0.0')
+    expect(formatDistance(-3)).toBe('D0.00')
   })
 })
 
@@ -60,10 +62,37 @@ describe('formatTimecode', () => {
 })
 
 describe('formatRms', () => {
-  it('renders two decimals clamped to 0..1', () => {
-    expect(formatRms(0.312)).toBe('RMS 0.31')
-    expect(formatRms(1.7)).toBe('RMS 1.00')
-    expect(formatRms(-0.2)).toBe('RMS 0.00')
+  it('renders three decimals clamped to 0..1', () => {
+    expect(formatRms(0.3127)).toBe('RMS 0.313')
+    expect(formatRms(1.7)).toBe('RMS 1.000')
+    expect(formatRms(-0.2)).toBe('RMS 0.000')
+  })
+})
+
+describe('formatAzEl', () => {
+  it('renders bearing with signed elevation', () => {
+    expect(formatAzEl(143.24, 12.41)).toBe('AZ 143.2 · EL +12.4')
+    expect(formatAzEl(10, -5.06)).toBe('AZ 10.0 · EL -5.1')
+  })
+  it('normalizes azimuth to 0..360', () => {
+    expect(formatAzEl(-90, 0)).toBe('AZ 270.0 · EL +0.0')
+    expect(formatAzEl(725, 0)).toBe('AZ 5.0 · EL +0.0')
+  })
+  it('clamps elevation to ±90', () => {
+    expect(formatAzEl(0, 120)).toBe('AZ 0.0 · EL +90.0')
+  })
+})
+
+describe('formatClock', () => {
+  it('renders mm:ss with tenths', () => {
+    expect(formatClock(0)).toBe('T 00:00.0')
+    expect(formatClock(62.47)).toBe('T 01:02.4')
+  })
+  it('rolls over to h:mm:ss.d above an hour', () => {
+    expect(formatClock(3600.5)).toBe('T 1:00:00.5')
+  })
+  it('never goes negative', () => {
+    expect(formatClock(-3)).toBe('T 00:00.0')
   })
 })
 

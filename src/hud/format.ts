@@ -17,10 +17,12 @@ export function formatPartLabel(id: number): string {
   return `PRT ${String(Math.max(0, Math.round(id))).padStart(2, '0')}`
 }
 
-/** 'D2.4' — real camera distance. Depth instead of X/Y keeps the readout honest
- *  about what the app actually measures (screen coords would be decoration). */
+/** 'D2.42' — real camera distance. Depth instead of X/Y keeps the readout honest
+ *  about what the app actually measures (screen coords would be decoration).
+ *  Two decimals on purpose: the tail digit churns with the orbit and scatter,
+ *  which is what makes the instrument read as live. */
 export function formatDistance(d: number): string {
-  return `D${Math.max(0, d).toFixed(1)}`
+  return `D${Math.max(0, d).toFixed(2)}`
 }
 
 /** 'mm:ss' elapsed, rolling to 'h:mm:ss' above an hour (sets run long). */
@@ -34,7 +36,29 @@ export function formatTimecode(seconds: number): string {
 }
 
 export function formatRms(rms: number): string {
-  return `RMS ${Math.min(1, Math.max(0, rms)).toFixed(2)}`
+  return `RMS ${Math.min(1, Math.max(0, rms)).toFixed(3)}`
+}
+
+/** 'AZ 143.2 · EL +12.4' — real camera bearing around the object. autoRotate
+ *  keeps the azimuth moving every frame, so this line churns even in silence. */
+export function formatAzEl(azDeg: number, elDeg: number): string {
+  const az = ((azDeg % 360) + 360) % 360
+  const el = Math.max(-90, Math.min(90, elDeg))
+  const sign = el < 0 ? '-' : '+'
+  return `AZ ${az.toFixed(1)} · EL ${sign}${Math.abs(el).toFixed(1)}`
+}
+
+/** 'T 01:02.4' session clock with tenths, rolling to 'T h:mm:ss.d'. The tenths
+ *  digit ticks 10x/s — the guaranteed always-moving readout. */
+export function formatClock(seconds: number): string {
+  const t = Math.max(0, seconds)
+  const tenth = Math.floor((t % 1) * 10)
+  const whole = Math.floor(t)
+  const m = Math.floor(whole / 60) % 60
+  const s = whole % 60
+  const h = Math.floor(whole / 3600)
+  const ms = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${tenth}`
+  return h > 0 ? `T ${h}:${ms}` : `T ${ms}`
 }
 
 /** Quantize band levels to integer bar steps so the meter draws crisp rows.

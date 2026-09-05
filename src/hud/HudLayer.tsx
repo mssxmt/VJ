@@ -26,6 +26,8 @@ import {
   formatDistance,
   formatTimecode,
   formatRms,
+  formatAzEl,
+  formatClock,
   bandBarLevels,
   typeSlice,
 } from './format'
@@ -108,7 +110,13 @@ function drawFrameFurniture(
   ctx.stroke()
 }
 
-function drawTopLeft(ctx: CanvasRenderingContext2D, r: SafeRect, u: number, a: number): void {
+function drawTopLeft(
+  ctx: CanvasRenderingContext2D,
+  r: SafeRect,
+  u: number,
+  a: number,
+  elapsed: number,
+): void {
   const x = r.x0 + 14 * u
   const y = r.y0 + 16 * u
   ctx.textAlign = 'left'
@@ -122,11 +130,22 @@ function drawTopLeft(ctx: CanvasRenderingContext2D, r: SafeRect, u: number, a: n
   const sym = Math.round(effectiveValue('machine.symmetry'))
   const parts = Math.round(effectiveValue('machine.partCount'))
   ctx.fillText(`${pat} · SYM ${sym} · P ${parts}`, x, y + 30 * u)
+  // Session clock: tenths tick 10x/s so the cluster visibly runs even when the
+  // audio is silent — the "instrument is alive" floor state made literal.
+  ctx.font = hudFont(300, 13 * u)
+  ctx.fillStyle = `rgba(${DIM}, ${0.85 * a})`
+  ctx.fillText(formatClock(elapsed), x, y + 53 * u)
 }
 
 const _levels: number[] = []
 
-function drawBottomRight(ctx: CanvasRenderingContext2D, r: SafeRect, u: number, a: number): void {
+function drawBottomRight(
+  ctx: CanvasRenderingContext2D,
+  r: SafeRect,
+  u: number,
+  a: number,
+  camera: THREE.Camera,
+): void {
   const x = r.x1 - 14 * u
   let y = r.y1 - 16 * u
   ctx.textAlign = 'right'
@@ -160,6 +179,16 @@ function drawBottomRight(ctx: CanvasRenderingContext2D, r: SafeRect, u: number, 
   ctx.font = hudFont(300, 15 * u)
   ctx.fillStyle = `rgba(${DIM}, ${a})`
   ctx.fillText(formatRms(audioFrame.rms), x, y)
+  y -= 24 * u
+
+  // Camera bearing: autoRotate turns azimuth every frame, so this line churns
+  // permanently — real motion data, not decorated randomness.
+  const p = camera.position
+  const az = Math.atan2(p.x, p.z) * (180 / Math.PI)
+  const el = Math.atan2(p.y, Math.hypot(p.x, p.z)) * (180 / Math.PI)
+  ctx.font = hudFont(300, 13 * u)
+  ctx.fillStyle = `rgba(${DIM}, ${0.85 * a})`
+  ctx.fillText(formatAzEl(az, el), x, y)
   y -= 27 * u
 
   // 7-band meter, quantized so the bars step instead of shimmer.
@@ -350,8 +379,8 @@ export function HudLayer() {
 
     const r = computeSafeRect(w, h, u)
     drawFrameFurniture(ctx, r, u, a)
-    drawTopLeft(ctx, r, u, a)
-    drawBottomRight(ctx, r, u, a)
+    drawTopLeft(ctx, r, u, a, state.clock.elapsedTime)
+    drawBottomRight(ctx, r, u, a, state.camera)
     drawBrackets(ctx, state.camera, w, h, u, dt, slots.current, lastGen)
 
     texture.needsUpdate = true
