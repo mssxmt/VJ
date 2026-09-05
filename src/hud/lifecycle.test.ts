@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   createSlot,
   triggerAcquire,
+  triggerReacquire,
   advanceSlot,
   telemetryAlpha,
   ACQUIRE_TIME,
@@ -101,5 +102,25 @@ describe('telemetryAlpha', () => {
   it('rises with rms and caps at 1', () => {
     expect(telemetryAlpha(0.2, 0)).toBeGreaterThan(0.3)
     expect(telemetryAlpha(1, 1)).toBe(1)
+  })
+})
+
+describe('triggerReacquire', () => {
+  it('restarts the type-in but preserves alpha', () => {
+    const s = createSlot()
+    triggerAcquire(s, 0)
+    for (let i = 0; i < 60; i++) advanceSlot(s, 0.5, 0, 1 / 60)
+    expect(s.phase).toBe('locked')
+    const alphaBefore = s.alpha
+    expect(alphaBefore).toBeGreaterThan(0.9)
+    triggerReacquire(s)
+    expect(s.phase).toBe('acquiring')
+    expect(s.progress).toBe(0)
+    expect(s.alpha).toBe(alphaBefore)
+    // Alpha must survive the whole re-type-in, not just the trigger frame.
+    for (let i = 0; i < 10; i++) {
+      advanceSlot(s, 0.5, 0, 1 / 60)
+      expect(s.alpha).toBeGreaterThanOrEqual(alphaBefore)
+    }
   })
 })

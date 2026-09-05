@@ -26,6 +26,11 @@ export const PARAMS: readonly ParamDef[] = [
   { id: 'machine.symmetry', label: 'Symmetry', group: 'machine', min: 1, max: 8, default: 2, step: 1 },
   { id: 'machine.scaleSpread', label: 'Scale Spread', group: 'machine', min: 0, max: 1, default: 0.5 },
   { id: 'machine.reactivity', label: 'Reactivity', group: 'machine', min: 0, max: 2, default: 1 },
+  // Gantz-Graf motion: probability/intensity of onset-synced instantaneous
+  // reconfiguration (parts snap between precomputed grammar poses).
+  { id: 'machine.convulse', label: 'Convulse', group: 'machine', min: 0, max: 1, default: 0.6 },
+  // Edge-wire overlay opacity on the dominant masses.
+  { id: 'machine.wires', label: 'Wires', group: 'machine', min: 0, max: 1, default: 0.5 },
   { id: 'machine.spinX', label: 'Spin X (tilt)', group: 'machine', min: -1, max: 1, default: 0 },
   { id: 'machine.spinY', label: 'Spin Y (pan)', group: 'machine', min: -1, max: 1, default: 0 },
   { id: 'machine.spinZ', label: 'Spin Z (roll)', group: 'machine', min: -1, max: 1, default: 0 },

@@ -9,6 +9,12 @@ export interface TrackedPart {
   mesh: THREE.Mesh
   partId: number
   band: number
+  /** Copy-0 flat index — lets MachineObject stamp pose switches per part. */
+  flatIndex: number
+  /** Convulsion event counter at this part's last pose switch. HudLayer
+   *  re-acquires ONLY the slot whose target actually moved (a global
+   *  re-acquire strobed every bracket on every beat). */
+  poseStamp: number
 }
 
 export const hudTracking = {

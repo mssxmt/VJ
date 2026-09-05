@@ -9,8 +9,12 @@ import * as THREE from 'three'
 import { createRng, range } from '../lib/random'
 
 const TEX_SIZE = 256
-const GROOVE = '#14161a'
-const HI = '#f4f4f4'
+// Dark-chrome tuning: albedo multiplies the near-black material tint, so the
+// base sits mid-grey and the grooves/highlights carry the panel detail as
+// glints rather than print.
+const BASE = '#9aa0a8'
+const GROOVE = '#23262b'
+const HI = '#eef2f6'
 
 /** Draw one unique asymmetric panel-line texture for the given part id. */
 export function createPanelTexture(id: number): THREE.CanvasTexture {
@@ -21,7 +25,7 @@ export function createPanelTexture(id: number): THREE.CanvasTexture {
   const rng = createRng((id * 2654435761) >>> 0)
   const S = TEX_SIZE
 
-  g.fillStyle = '#dcdcdc'
+  g.fillStyle = BASE
   g.fillRect(0, 0, S, S)
 
   const rect = (x: number, y: number, w: number, h: number, lineW: number) => {

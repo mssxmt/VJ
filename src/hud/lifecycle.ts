@@ -39,6 +39,16 @@ export function triggerAcquire(s: SlotState, delay: number): void {
   s.delay = delay
 }
 
+/** Re-acquire a target that MOVED (convulsion): the type-in restarts but alpha
+ *  is preserved — dropping it to 0 on every beat made brackets strobe and LCK
+ *  unreachable at club tempos. */
+export function triggerReacquire(s: SlotState): void {
+  s.phase = 'acquiring'
+  s.progress = 0
+  s.quietFor = 0
+  s.delay = 0
+}
+
 // Positional args, not an options object: this runs once per slot per frame
 // and an object literal would allocate on the hot path.
 export function advanceSlot(s: SlotState, bandLevel: number, onsetEnv: number, dt: number): void {
@@ -53,7 +63,9 @@ export function advanceSlot(s: SlotState, bandLevel: number, onsetEnv: number, d
         break
       }
       s.progress = Math.min(1, s.progress + dt / ACQUIRE_TIME)
-      s.alpha = s.progress
+      // max(): a fresh acquire fades in with the type-in, but a re-acquire
+      // (alpha preserved) must not dip back to zero mid-lock.
+      s.alpha = Math.max(s.alpha, s.progress)
       if (s.progress >= 1) s.phase = 'locked'
       break
     case 'locked':

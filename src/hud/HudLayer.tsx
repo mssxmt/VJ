@@ -16,6 +16,7 @@ import {
   createSlot,
   advanceSlot,
   triggerAcquire,
+  triggerReacquire,
   telemetryAlpha,
   type SlotState,
 } from './lifecycle'
@@ -264,10 +265,14 @@ function drawBrackets(
   dt: number,
   slots: SlotState[],
   lastGen: MutableRefObject<number>,
+  slotStamps: number[],
 ): void {
   if (hudTracking.generation !== lastGen.current) {
     lastGen.current = hudTracking.generation
-    for (let i = 0; i < slots.length; i++) triggerAcquire(slots[i], i * 0.12)
+    for (let i = 0; i < slots.length; i++) {
+      triggerAcquire(slots[i], i * 0.12)
+      slotStamps[i] = 0
+    }
   }
   const targets = Math.min(
     Math.round(effectiveValue('hud.targets')),
@@ -282,6 +287,12 @@ function drawBrackets(
     // hud.targets fades and re-acquires instead of popping stale locked slots.
     const part = i < targets ? hudTracking.parts[i] : undefined
     const slot = slots[i]
+    // Convulsion: re-acquire ONLY the bracket whose target actually snapped to
+    // a new pose (alpha preserved) — the others hold their lock.
+    if (part && part.poseStamp !== slotStamps[i]) {
+      slotStamps[i] = part.poseStamp
+      triggerReacquire(slot)
+    }
     if (part) advanceSlot(slot, audioFrame.bands[part.band] ?? 0, audioFrame.onsetEnv, dt)
     else advanceSlot(slot, 0, 0, dt)
     if (!part || slot.alpha <= 0.02) continue
@@ -332,6 +343,7 @@ function drawBrackets(
 export function HudLayer() {
   const slots = useRef<SlotState[]>(Array.from({ length: MAX_TRACKED }, createSlot))
   const lastGen = useRef(-1)
+  const slotStamps = useRef<number[]>(new Array(MAX_TRACKED).fill(0))
   const smoothTele = useRef(0)
   const cleared = useRef(false)
 
@@ -381,7 +393,7 @@ export function HudLayer() {
     drawFrameFurniture(ctx, r, u, a)
     drawTopLeft(ctx, r, u, a, state.clock.elapsedTime)
     drawBottomRight(ctx, r, u, a, state.camera)
-    drawBrackets(ctx, state.camera, w, h, u, dt, slots.current, lastGen)
+    drawBrackets(ctx, state.camera, w, h, u, dt, slots.current, lastGen, slotStamps.current)
 
     texture.needsUpdate = true
   })
