@@ -4,6 +4,10 @@ import * as THREE from 'three'
 import type { MachinePart } from './generate'
 
 export interface WorldPose {
+  /** Full affine world matrix — the render source of truth. Organism children
+   *  sit at continuous rotations under anisotropic stalks/tendrils, which
+   *  shears the world matrix; decompose-to-TRS drops that shear. */
+  matrix: THREE.Matrix4
   pos: THREE.Vector3
   quat: THREE.Quaternion
   /** Decomposed per pose: a rotated child under an anisotropic ancestor gets a
@@ -14,6 +18,9 @@ export interface WorldPose {
 
 export interface FlatPart {
   part: MachinePart
+  /** Primary world matrix (=== poses[0].matrix; nothing mutates them, so the
+   *  shared instance is safe). */
+  matrix: THREE.Matrix4
   pos: THREE.Vector3
   quat: THREE.Quaternion
   scale: THREE.Vector3
@@ -45,7 +52,7 @@ export function flatten(root: MachinePart): FlatPart[] {
     const quat = new THREE.Quaternion()
     const scale = new THREE.Vector3()
     world.decompose(pos, quat, scale)
-    const poses: WorldPose[] = [{ pos, quat, scale }]
+    const poses: WorldPose[] = [{ matrix: world, pos, quat, scale }]
     if (part.poses) {
       for (let k = 1; k < part.poses.length; k++) {
         const alt = part.poses[k]
@@ -56,10 +63,10 @@ export function flatten(root: MachinePart): FlatPart[] {
         const q = new THREE.Quaternion()
         const s = new THREE.Vector3()
         w.decompose(p, q, s)
-        poses.push({ pos: p, quat: q, scale: s })
+        poses.push({ matrix: w, pos: p, quat: q, scale: s })
       }
     }
-    out.push({ part, pos, quat, scale, poses })
+    out.push({ part, matrix: world, pos, quat, scale, poses })
     // Children compose against the PRIMARY transform (see FlatPart.poses).
     for (const c of part.children) walk(c, world)
   }

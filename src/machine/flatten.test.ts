@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import { flatten } from './flatten'
-import { generateMachine, type MachineConfig, type MachinePart } from './generate'
+import { generateMachine, generateOrganism, type MachineConfig, type MachinePart } from './generate'
 
 const config: MachineConfig = {
   seed: 42, pattern: 'machine', complexity: 0.6, partCount: 40, symmetry: 2, scaleSpread: 0.5,
@@ -72,5 +72,45 @@ describe('flatten pose composition', () => {
       }
     }
     expect(divergentFound).toBe(true)
+  })
+})
+
+describe('full affine matrices (organism shear)', () => {
+  const organismConfig: MachineConfig = { ...config, pattern: 'organism' }
+
+  it('every pose matrix equals parentWorld · localOf(pose) for machine AND organism', () => {
+    for (const tree of [generateMachine(config), generateOrganism(organismConfig)]) {
+      const parents = parentWorlds(tree)
+      for (const fp of flatten(tree)) {
+        const parentWorld = parents.get(fp.part.id)!
+        const localPoses = fp.part.poses ?? [
+          { position: fp.part.position, rotation: fp.part.rotation },
+        ]
+        expect(fp.matrix.elements).toHaveLength(16)
+        for (let k = 0; k < localPoses.length; k++) {
+          const expected = parentWorld
+            .clone()
+            .multiply(localOf(localPoses[k].position, localPoses[k].rotation, fp.part.scale))
+          const actual = fp.poses[k].matrix
+          for (let e = 0; e < 16; e++) {
+            expect(actual.elements[e]).toBeCloseTo(expected.elements[e], 6)
+          }
+        }
+      }
+    }
+  })
+
+  it('organism parts actually shear — TRS recomposition loses the world matrix', () => {
+    // Why WorldPose carries the full matrix: organism children sit at
+    // continuous rotations under anisotropic stalks/tendrils, and decompose
+    // drops that shear (machine parts are 90°-stepped, hence unaffected).
+    const flat = flatten(generateOrganism(organismConfig))
+    const trs = new THREE.Matrix4()
+    let sheared = 0
+    for (const fp of flat) {
+      trs.compose(fp.pos, fp.quat, fp.scale)
+      if (trs.elements.some((v, e) => Math.abs(v - fp.matrix.elements[e]) > 1e-6)) sheared++
+    }
+    expect(sheared).toBeGreaterThan(0)
   })
 })

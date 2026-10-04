@@ -52,7 +52,9 @@ export function formatAzEl(azDeg: number, elDeg: number): string {
  *  digit ticks 10x/s — the guaranteed always-moving readout. */
 export function formatClock(seconds: number): string {
   const t = Math.max(0, seconds)
-  const tenth = Math.floor((t % 1) * 10)
+  // t % 1 lands just below the decimal (1.2 % 1 = 0.1999…), which floored the
+  // tenth one digit low ~39% of the time — nudge before flooring.
+  const tenth = Math.floor((t % 1) * 10 + 1e-9)
   const whole = Math.floor(t)
   const m = Math.floor(whole / 60) % 60
   const s = whole % 60

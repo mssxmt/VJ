@@ -111,12 +111,6 @@ async function transcodeToMp4(webm: Blob): Promise<Blob> {
 
 export class Recorder {
   private mr: MediaRecorder | null = null
-  private chunks: Blob[] = []
-  private format: RecFormat = 'webm'
-  private onTranscode?: (active: boolean) => void
-  private onError?: (message: string) => void
-  private onStateChange?: (recording: boolean) => void
-  private cleanupVideo?: () => void
   recording = false
   /** performance.now() of the current/last start — the HUD burns a real
    *  elapsed timecode into the output instead of a decorative counter. */
@@ -127,16 +121,14 @@ export class Recorder {
     if (typeof MediaRecorder === 'undefined') {
       throw new Error('Recording is not supported in this browser.')
     }
-    this.format = opts.format
-    this.onTranscode = opts.onTranscode
-    this.onError = opts.onError
-    this.onStateChange = opts.onStateChange
+    const { format, onTranscode, onError, onStateChange } = opts
 
     // MP4 path: downscale to 1080p so the transcode is fast. WebM path: full res.
     let videoStream: MediaStream
-    if (opts.format === 'mp4') {
+    let cleanupVideo: (() => void) | undefined
+    if (format === 'mp4') {
       const capped = await buildCappedStream(opts.canvas, opts.fps)
-      this.cleanupVideo = capped.cleanup
+      cleanupVideo = capped.cleanup
       videoStream = capped.stream
     } else {
       videoStream = opts.canvas.captureStream(opts.fps)
@@ -146,47 +138,55 @@ export class Recorder {
       ...videoStream.getVideoTracks(),
       ...opts.audioStream.getAudioTracks(),
     ])
-    this.chunks = []
-    this.mr = new MediaRecorder(stream, {
+    // Session state lives in this closure, not on the instance: a stale
+    // session's onstop fires asynchronously, and with shared fields it used
+    // to flip the new session's flag, clear its chunks, and stop its video
+    // tracks (stop(); start() before the first onstop event).
+    const chunks: Blob[] = []
+    const mr = new MediaRecorder(stream, {
       mimeType: pickWebmMime(),
       videoBitsPerSecond: 16_000_000,
       audioBitsPerSecond: 192_000,
     })
-    this.mr.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) this.chunks.push(e.data)
+    const isCurrent = () => this.mr === mr
+    this.mr = mr
+    mr.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data)
     }
-    this.mr.onerror = (e) => {
+    mr.onerror = (e) => {
+      if (!isCurrent()) return
       this.recording = false
-      this.onStateChange?.(false)
+      onStateChange?.(false)
       const err = (e as unknown as { error?: DOMException }).error
-      this.onError?.(`Recording failed: ${err?.message ?? 'MediaRecorder error'}`)
+      onError?.(`Recording failed: ${err?.message ?? 'MediaRecorder error'}`)
     }
-    this.mr.onstop = () => {
+    mr.onstop = () => {
       // MediaRecorder can stop without a user call (track ended, fatal error);
       // the flag must drop here too or the HUD keeps burning a growing REC
-      // counter into footage that is no longer being recorded.
-      this.recording = false
-      this.onStateChange?.(false)
-      const webm = new Blob(this.chunks, { type: 'video/webm' })
-      this.chunks = []
-      this.cleanupVideo?.()
-      this.cleanupVideo = undefined
-      if (this.format === 'mp4') {
-        this.onTranscode?.(true)
+      // counter into footage that is no longer being recorded. A stale
+      // session still flushes its own blob but leaves instance state alone.
+      const webm = new Blob(chunks, { type: 'video/webm' })
+      cleanupVideo?.()
+      if (isCurrent()) {
+        this.recording = false
+        onStateChange?.(false)
+      }
+      if (format === 'mp4') {
+        onTranscode?.(true)
         transcodeToMp4(webm)
           .then((mp4) => this.download(mp4, 'mp4'))
           .catch((e) =>
-            this.onError?.(`MP4 transcode failed: ${e instanceof Error ? e.message : String(e)}`),
+            onError?.(`MP4 transcode failed: ${e instanceof Error ? e.message : String(e)}`),
           )
-          .finally(() => this.onTranscode?.(false))
+          .finally(() => onTranscode?.(false))
       } else {
         this.download(webm, 'webm')
       }
     }
-    this.mr.start(1000)
+    mr.start(1000)
     this.recording = true
     this.startedAt = performance.now()
-    opts.onStateChange?.(true)
+    onStateChange?.(true)
   }
 
   stop(onStateChange?: (recording: boolean) => void): void {

@@ -200,6 +200,10 @@ const WIRE_TYPES = new Set(['core', 'box', 'fin', 'vent', 'strut'])
 /** How many of the largest faceted parts carry wires. */
 const WIRE_COUNT = 8
 
+// Per-frame scratch for the full-matrix render path (see useFrame).
+const _mat = new THREE.Matrix4()
+const _punch = new THREE.Vector3()
+
 
 /** Build a unique scatter profile per (copy, part) so every mesh — including
  *  across symmetry copies — moves independently. Root (core / nucleus) stays
@@ -475,11 +479,16 @@ export function MachineObject() {
         // Scatter offsets apply from whichever precomputed pose the convulsion
         // state has active (index 0 until the first event).
         const pp = fp.poses[poseIdx[ei]] ?? fp.poses[0]
-        m.position.copy(pp.pos).addScaledVector(sc.escape, off)
-        m.quaternion.copy(pp.quat)
-
         const punch = 1 + e * r.punch * 0.18 * reactivity
-        m.scale.set(pp.scale.x * punch, pp.scale.y * punch, pp.scale.z * punch)
+        // Fold punch + scatter into the full affine pose matrix; writing
+        // position/quaternion/scale instead would drop the organism shear.
+        _mat.copy(pp.matrix)
+        _mat.scale(_punch.set(punch, punch, punch))
+        _mat.elements[12] += sc.escape.x * off
+        _mat.elements[13] += sc.escape.y * off
+        _mat.elements[14] += sc.escape.z * off
+        m.matrix.copy(_mat)
+        m.matrixWorldNeedsUpdate = true
         if (mat) {
           mat.emissiveIntensity = e * r.flash * 0.5 * reactivity
         }
@@ -498,12 +507,17 @@ export function MachineObject() {
               <mesh
                 key={fp.part.id}
                 ref={(m) => {
-                  if (m) meshRefs.current[i] = m
+                  if (m) {
+                    meshRefs.current[i] = m
+                    // Full affine matrix drives the mesh (matrixAutoUpdate off
+                    // so useFrame's matrix.copy is authoritative) — TRS props
+                    // cannot express the organism shear. See WorldPose.matrix.
+                    m.matrixAutoUpdate = false
+                    m.matrix.copy(fp.matrix)
+                    m.matrixWorldNeedsUpdate = true
+                  }
                 }}
                 geometry={GEOMETRIES[fp.part.type]}
-                position={fp.pos}
-                quaternion={fp.quat}
-                scale={fp.scale}
               >
                 <meshStandardMaterial
                   ref={(m) => {

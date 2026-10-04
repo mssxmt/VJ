@@ -88,6 +88,14 @@ describe('formatClock', () => {
     expect(formatClock(0)).toBe('T 00:00.0')
     expect(formatClock(62.47)).toBe('T 01:02.4')
   })
+  it('keeps the tenth at floating-point decimal boundaries', () => {
+    // 1.2 % 1 is 0.1999…, so the uncorrected floor rendered '.1'.
+    expect(formatClock(1.2)).toBe('T 00:01.2')
+    expect(formatClock(2.4)).toBe('T 00:02.4')
+    expect(formatClock(3.3)).toBe('T 00:03.3')
+    expect(formatClock(1.9)).toBe('T 00:01.9')
+    expect(formatClock(59.7)).toBe('T 00:59.7')
+  })
   it('rolls over to h:mm:ss.d above an hour', () => {
     expect(formatClock(3600.5)).toBe('T 1:00:00.5')
   })
