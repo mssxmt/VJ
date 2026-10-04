@@ -36,6 +36,9 @@ export function handleKey(key: string): boolean {
     case 'p':
       toggleParam('machine.pattern')
       return true
+    case 't':
+      toggleParam('hud.visible')
+      return true
     case 'o':
       // Punch-in hold: press starts push+fisheye
       s.setParam('punch.trigger', 1)

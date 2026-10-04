@@ -21,6 +21,12 @@ describe('handleKey', () => {
     handleKey('g')
     expect(useParamStore.getState().values['effects.glitch']).toBeGreaterThan(0)
   })
+  it('t toggles the HUD between 0 and default', () => {
+    handleKey('t')
+    expect(useParamStore.getState().values['hud.visible']).toBe(0)
+    handleKey('t')
+    expect(useParamStore.getState().values['hud.visible']).toBe(1)
+  })
   it('returns handled flag', () => {
     expect(handleKey('r')).toBe(true)
     expect(handleKey('!')).toBe(false)

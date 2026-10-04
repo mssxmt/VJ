@@ -37,6 +37,12 @@ export interface Reactivity {
   flash: number
 }
 
+/** One alternate placement in the parent's local frame (for convulsions). */
+export interface PartPose {
+  position: [number, number, number]
+  rotation: [number, number, number]
+}
+
 export interface MachinePart {
   id: number
   type: PartType
@@ -45,6 +51,9 @@ export interface MachinePart {
   scale: [number, number, number]
   reactivity: Reactivity
   children: MachinePart[]
+  /** Alternate local poses (index 0 = the original placement). Convulsions
+   *  snap between these at runtime. Absent on the anchored root. */
+  poses?: PartPose[]
 }
 
 export interface MachineConfig {
@@ -89,6 +98,76 @@ export function countParts(root: MachinePart): number {
   return 1 + root.children.reduce((n, c) => n + countParts(c), 0)
 }
 
+// --- Convulsion poses -------------------------------------------------------
+// A tier/flush assembly grammar was tried here and reverted: across the seed
+// space it collapsed into boxy container-trains, losing the alien (使徒-like)
+// silhouettes of this generator. Convulsions instead derive alternates from
+// each part's ORIGINAL pose by quantized mutations, so the reconfiguration
+// language survives without constraining the shapes.
+
+const HALF_PI = Math.PI / 2
+
+/** Signed-permutation offsets: 90°/180° rotations of the local offset about a
+ *  principal axis. They preserve the offset length in the PARENT'S LOCAL frame
+ *  only — anisotropic ancestor scales can stretch it in world space, which is
+ *  accepted: the constellation rearranges without collapsing to the origin. */
+export const POS_MUTATIONS: readonly ((p: readonly number[]) => [number, number, number])[] = [
+  (p) => [p[0], -p[2], p[1]], // 90° about X
+  (p) => [p[2], p[1], -p[0]], // 90° about Y
+  (p) => [-p[1], p[0], p[2]], // 90° about Z
+  (p) => [-p[0], p[1], -p[2]], // 180° about Y
+  (p) => [-p[0], -p[1], p[2]], // 180° about Z
+  (p) => [p[0], -p[1], -p[2]], // 180° about X
+]
+
+/** Attach 3 quantized alternate poses to every non-root part, deterministic
+ *  per (seed, part id). Pure post-pass over the generated tree. */
+export function addConvulsionPoses(root: MachinePart, seed: number): void {
+  const walk = (part: MachinePart, isRoot: boolean): void => {
+    if (!isRoot) {
+      const rng = createRng((((Math.floor(seed) + 1) * 2654435761) ^ (part.id * 40503)) >>> 0)
+      const poses: PartPose[] = [
+        {
+          position: [part.position[0], part.position[1], part.position[2]],
+          rotation: [part.rotation[0], part.rotation[1], part.rotation[2]],
+        },
+      ]
+      const isDup = (pose: PartPose): boolean =>
+        poses.some(
+          (q) =>
+            q.position[0] === pose.position[0] &&
+            q.position[1] === pose.position[1] &&
+            q.position[2] === pose.position[2] &&
+            q.rotation[0] === pose.rotation[0] &&
+            q.rotation[1] === pose.rotation[1] &&
+            q.rotation[2] === pose.rotation[2],
+        )
+      for (let k = 0; k < 3; k++) {
+        // Bounded retry keeps alternates distinct (a duplicate pose would make
+        // a convulsion switch read as a dropped beat) while staying seeded.
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const position = pick(rng, POS_MUTATIONS)(part.position)
+          const rotation: [number, number, number] = [
+            part.rotation[0],
+            part.rotation[1],
+            part.rotation[2],
+          ]
+          // One 90°-multiple snap on one axis: stays on the machine's rotation
+          // lattice, instantly readable as a reconfiguration.
+          rotation[Math.floor(rng() * 3)] += (1 + Math.floor(rng() * 3)) * HALF_PI
+          const pose: PartPose = { position, rotation }
+          if (attempt < 7 && isDup(pose)) continue
+          poses.push(pose)
+          break
+        }
+      }
+      part.poses = poses
+    }
+    for (const c of part.children) walk(c, false)
+  }
+  walk(root, true)
+}
+
 export function generateMachine(config: MachineConfig): MachinePart {
   const rng = createRng(config.seed)
   let nextId = 0
@@ -130,6 +209,7 @@ export function generateMachine(config: MachineConfig): MachinePart {
     parent.children.push(part)
     all.push(part)
   }
+  addConvulsionPoses(root, config.seed)
   return root
 }
 
